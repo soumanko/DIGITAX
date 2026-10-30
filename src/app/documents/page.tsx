@@ -98,8 +98,17 @@ export default function DocumentsPage() {
       }
 
       setUploadSuccess(true);
-      // Pre-fill manual invoice entry with file name
-      setNewInvNum(file.name.replace(/\.[^/.]+$/, '').toUpperCase());
+      const extracted = data.extraction?.extractedData;
+      if (extracted) {
+        setNewInvNum(extracted.invoice_number || file.name.replace(/\.[^/.]+$/, '').toUpperCase());
+        setNewInvParty(extracted.supplier_name || extracted.buyer_name || '');
+        setNewInvGstin(extracted.supplier_gstin || extracted.buyer_gstin || '');
+        setNewInvTaxable(extracted.taxable_amount || '10000.00');
+        setNewInvRate(extracted.tax_rate || '18');
+        setNewInvDirection(extracted.buyer_gstin && !extracted.supplier_gstin ? 'sales' : 'purchase');
+      } else {
+        setNewInvNum(file.name.replace(/\.[^/.]+$/, '').toUpperCase());
+      }
       setShowManualModal(true);
     } catch (err: any) {
       setUploadError(err?.message || 'Error uploading document to server');

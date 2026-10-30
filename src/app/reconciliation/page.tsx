@@ -1,39 +1,45 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
 import { findMatchSuggestions, MatchCandidate } from '@/lib/reconciliation/engine';
 import { formatINR } from '@/lib/decimal';
 import {
   Link2,
   CheckCircle2,
-  ArrowRight,
   Sparkles,
   Check,
   X,
+  RotateCcw,
   AlertCircle,
-  HelpCircle,
   FileText,
   CreditCard,
-  Layers,
-  History
+  History,
+  Search,
 } from 'lucide-react';
 
 export default function ReconciliationPage() {
   const [invoices, setInvoices] = useState(DEMO_INVOICES);
   const [transactions, setTransactions] = useState(DEMO_TRANSACTIONS);
-  const [confirmedMatches, setConfirmedMatches] = useState<string[]>(['match-pre-1', 'match-pre-2']);
+  const [persistedMatches, setPersistedMatches] = useState<any[]>([]);
+  const [confirmedMatchKeys, setConfirmedMatchKeys] = useState<string[]>([]);
   const [dismissedMatches, setDismissedMatches] = useState<string[]>([]);
   const [isSubmittingMatch, setIsSubmittingMatch] = useState<string | null>(null);
+  const [isReversing, setIsReversing] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [partialAmounts, setPartialAmounts] = useState<Record<string, string>>({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchReconData = async () => {
     try {
-      const [invRes, txnRes] = await Promise.all([
+      const [reconRes, invRes, txnRes] = await Promise.all([
+        fetch('/api/reconciliation'),
         fetch('/api/invoices'),
         fetch('/api/transactions'),
       ]);
@@ -51,73 +57,63 @@ export default function ReconciliationPage() {
           setTransactions(txnData.transactions);
         }
       }
+
+      if (reconRes.ok) {
+        const reconData = await reconRes.json();
+        if (Array.isArray(reconData.matches)) {
+          setPersistedMatches(reconData.matches);
+        }
+      }
     } catch (e) {
       console.warn('Could not load remote reconciliation data:', e);
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchReconData();
   }, []);
 
-  // Find automated match suggestions using our reconciliation engine
+  // Compute live match suggestions using deterministic reconciliation engine
   const matchCandidates = findMatchSuggestions(invoices, transactions).filter(
     (c) =>
-      !confirmedMatches.includes(`${c.invoice.id}-${c.transaction.id}`) &&
-      !dismissedMatches.includes(`${c.invoice.id}-${c.transaction.id}`)
+      !confirmedMatchKeys.includes(`${c.invoice.id}-${c.transaction.id}`) &&
+      !dismissedMatches.includes(`${c.invoice.id}-${c.transaction.id}`) &&
+      (searchTerm === '' ||
+        c.invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.transaction.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleApproveMatch = async (candidate: MatchCandidate) => {
     const matchKey = `${candidate.invoice.id}-${candidate.transaction.id}`;
+    const amountToAllocate = partialAmounts[matchKey] || candidate.suggestedMatchAmount;
+
     setIsSubmittingMatch(matchKey);
     setApiError(null);
+    setSuccessMsg(null);
 
     try {
-      // Call server API for atomic update & audit logging
       const res = await fetch('/api/reconciliation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transaction_id: candidate.transaction.id,
           invoice_id: candidate.invoice.id,
-          allocated_amount: candidate.suggestedMatchAmount,
+          allocated_amount: amountToAllocate,
         }),
       });
 
       if (!res.ok) {
         const errData = await res.json();
-        console.warn('Remote reconciliation match notice (using local state fallback):', errData);
+        throw new Error(errData.error || 'Failed to confirm reconciliation match');
       }
 
-      setConfirmedMatches([...confirmedMatches, matchKey]);
+      const resData = await res.json();
+      setConfirmedMatchKeys((prev) => [...prev, matchKey]);
+      setSuccessMsg(`Successfully reconciled ₹${amountToAllocate} against Invoice ${candidate.invoice.invoice_number}`);
+      setTimeout(() => setSuccessMsg(null), 5000);
 
-      // Update invoice payment status
-      setInvoices(
-        invoices.map((inv) =>
-          inv.id === candidate.invoice.id
-            ? {
-                ...inv,
-                amount_paid: candidate.suggestedMatchAmount,
-                amount_due: '0.00',
-                payment_status: 'paid',
-              }
-            : inv
-        )
-      );
-
-      // Update transaction to matched
-      setTransactions(
-        transactions.map((txn) =>
-          txn.id === candidate.transaction.id
-            ? {
-                ...txn,
-                reconciliation_status: 'matched',
-                matched_amount: candidate.suggestedMatchAmount,
-                unmatched_amount: '0.00',
-              }
-            : txn
-        )
-      );
+      // Refresh live records from server
+      await fetchReconData();
     } catch (err: any) {
       setApiError(err?.message || 'Failed to approve match');
     } finally {
@@ -125,9 +121,35 @@ export default function ReconciliationPage() {
     }
   };
 
+  const handleReverseMatch = async (matchId: string) => {
+    setIsReversing(matchId);
+    setApiError(null);
+    setSuccessMsg(null);
+
+    try {
+      const res = await fetch(`/api/reconciliation?match_id=${encodeURIComponent(matchId)}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to reverse match');
+      }
+
+      setSuccessMsg('Reconciliation match reversed successfully. Balances restored.');
+      setTimeout(() => setSuccessMsg(null), 5000);
+
+      await fetchReconData();
+    } catch (err: any) {
+      setApiError(err?.message || 'Failed to reverse match');
+    } finally {
+      setIsReversing(null);
+    }
+  };
+
   const handleDismissMatch = (candidate: MatchCandidate) => {
     const matchKey = `${candidate.invoice.id}-${candidate.transaction.id}`;
-    setDismissedMatches([...dismissedMatches, matchKey]);
+    setDismissedMatches((prev) => [...prev, matchKey]);
   };
 
   return (
@@ -140,19 +162,51 @@ export default function ReconciliationPage() {
               Bank & UPI Reconciliation Engine
             </h1>
             <p className="text-xs sm:text-sm text-text-secondary mt-1">
-              Match incoming UPI payments and outgoing vendor NEFTs to tax invoices with explainable heuristics.
+              Match incoming UPI payments and outgoing vendor NEFTs to tax invoices with atomic persistence and audit trails.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <Badge variant="success">2 Auto-Reconciled</Badge>
+            <Badge variant="success">{persistedMatches.filter((m) => m.match_status === 'confirmed').length} Confirmed</Badge>
             <Badge variant={matchCandidates.length > 0 ? 'accent' : 'outline'}>
               {matchCandidates.length} Suggestions Pending
             </Badge>
           </div>
         </div>
 
-        {/* AI Heuristics Suggestion Cards */}
+        {/* Status Alerts */}
+        {apiError && (
+          <div className="p-3.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{apiError}</span>
+            </div>
+            <button onClick={() => setApiError(null)} className="text-red-500 hover:text-red-700">✕</button>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="p-3.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* Search & Filters */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+            <Input
+              type="text"
+              placeholder="Search by invoice # or narration..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 h-9 text-xs"
+            />
+          </div>
+        </div>
+
+        {/* Match Suggestions */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider flex items-center gap-1.5">
@@ -167,7 +221,11 @@ export default function ReconciliationPage() {
           {matchCandidates.length > 0 ? (
             <div className="space-y-4">
               {matchCandidates.map((candidate, idx) => {
+                const matchKey = `${candidate.invoice.id}-${candidate.transaction.id}`;
                 const isHighConfidence = candidate.confidenceScore >= 0.85;
+                const isSubmitting = isSubmittingMatch === matchKey;
+                const allocVal = partialAmounts[matchKey] || candidate.suggestedMatchAmount;
+
                 return (
                   <Card
                     key={idx}
@@ -189,7 +247,7 @@ export default function ReconciliationPage() {
 
                     <CardContent className="p-5">
                       <div className="grid grid-cols-1 md:grid-cols-11 gap-4 items-center">
-                        {/* Left: Invoice Side (5 cols) */}
+                        {/* Target Invoice */}
                         <div className="md:col-span-5 p-3.5 rounded-xl bg-surface-secondary border border-border">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-text-secondary uppercase mb-2">
                             <FileText className="h-3.5 w-3.5 text-primary-600" />
@@ -200,32 +258,32 @@ export default function ReconciliationPage() {
                           </div>
                           <div className="font-semibold text-xs text-text-primary mt-0.5">
                             {candidate.invoice.invoice_type === 'purchase_tax_invoice'
-                              ? candidate.invoice.supplier_legal_name
-                              : candidate.invoice.customer_legal_name}
+                              ? candidate.invoice.supplier_legal_name || candidate.invoice.supplier_name
+                              : candidate.invoice.customer_legal_name || candidate.invoice.buyer_name}
                           </div>
                           <div className="flex justify-between items-center text-xs mt-2 pt-2 border-t border-border/50">
-                            <span className="text-text-secondary">Outstanding:</span>
+                            <span className="text-text-secondary">Outstanding Due:</span>
                             <span className="font-bold text-primary-600">
                               {formatINR(candidate.invoice.outstanding_balance || candidate.invoice.amount_due || '0.00')}
                             </span>
                           </div>
                         </div>
 
-                        {/* Center Link Icon (1 col) */}
+                        {/* Center Link Icon */}
                         <div className="hidden md:flex md:col-span-1 justify-center items-center text-primary-600">
                           <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900/40 flex items-center justify-center">
                             <Link2 className="h-4 w-4" />
                           </div>
                         </div>
 
-                        {/* Right: Bank Record Side (5 cols) */}
+                        {/* Bank Record */}
                         <div className="md:col-span-5 p-3.5 rounded-xl bg-surface-secondary border border-border">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-text-secondary uppercase mb-2">
                             <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
                             Bank / UPI Record
                           </div>
                           <div className="font-mono text-xs text-text-secondary">
-                            {candidate.transaction.transaction_date} • {candidate.transaction.bank_account_name}
+                            {candidate.transaction.transaction_date} • {candidate.transaction.bank_account_name || 'Bank Account'}
                           </div>
                           <div className="font-semibold text-xs text-text-primary mt-0.5 line-clamp-1">
                             {candidate.transaction.description}
@@ -239,7 +297,7 @@ export default function ReconciliationPage() {
                         </div>
                       </div>
 
-                      {/* Reasons Chip Bar */}
+                      {/* Reasons & Allocation */}
                       <div className="mt-4 pt-3 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="font-semibold text-text-tertiary">Match evidence:</span>
@@ -253,23 +311,42 @@ export default function ReconciliationPage() {
                           ))}
                         </div>
 
-                        {/* Action Buttons */}
+                        {/* Allocation & Actions */}
                         <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[11px] text-text-secondary">₹</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={allocVal}
+                              onChange={(e) =>
+                                setPartialAmounts({
+                                  ...partialAmounts,
+                                  [matchKey]: e.target.value,
+                                })
+                              }
+                              className="w-24 h-7 text-xs px-2"
+                              title="Custom settlement amount for partial payments"
+                            />
+                          </div>
+
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDismissMatch(candidate)}
-                            className="text-xs text-text-tertiary hover:text-red-600"
+                            className="text-xs text-text-tertiary hover:text-red-600 h-7"
                           >
                             <X className="h-3.5 w-3.5 mr-1" /> Dismiss
                           </Button>
                           <Button
                             variant="primary"
                             size="sm"
+                            disabled={isSubmitting}
                             onClick={() => handleApproveMatch(candidate)}
-                            className="text-xs"
+                            className="text-xs h-7"
                           >
-                            <Check className="h-3.5 w-3.5 mr-1 text-white" /> Approve & Link Match
+                            <Check className="h-3.5 w-3.5 mr-1 text-white" />
+                            {isSubmitting ? 'Linking...' : 'Approve Match'}
                           </Button>
                         </div>
                       </div>
@@ -291,11 +368,11 @@ export default function ReconciliationPage() {
           )}
         </div>
 
-        {/* Existing Confirmed Matches Log */}
+        {/* Audit Log of Reconciled Settlements */}
         <div className="space-y-3 pt-4">
           <h3 className="text-sm font-bold text-text-primary flex items-center gap-1.5">
             <History className="h-4 w-4 text-text-secondary" />
-            Audit Log of Reconciled Settlements (October 2026)
+            Audit Log of Reconciled Settlements
           </h3>
 
           <Card>
@@ -304,65 +381,59 @@ export default function ReconciliationPage() {
                 <table className="w-full text-xs text-left">
                   <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
                     <tr>
-                      <th className="px-4 py-2.5">Invoice #</th>
-                      <th className="px-4 py-2.5">Vendor / Client</th>
-                      <th className="px-4 py-2.5">Bank Reference / UPI</th>
-                      <th className="px-4 py-2.5 text-right">Settled Amount</th>
-                      <th className="px-4 py-2.5 text-right">Audit Status</th>
+                      <th className="px-4 py-2.5">Settlement ID</th>
+                      <th className="px-4 py-2.5">Date</th>
+                      <th className="px-4 py-2.5">Method</th>
+                      <th className="px-4 py-2.5 text-right">Allocated Amount</th>
+                      <th className="px-4 py-2.5 text-right">Status</th>
+                      <th className="px-4 py-2.5 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    <tr className="hover:bg-surface-tertiary/50">
-                      <td className="px-4 py-3 font-mono font-bold text-text-primary">
-                        APX/2026/881
-                      </td>
-                      <td className="px-4 py-3 text-text-primary">
-                        Apex FMCG Distributors LLP
-                      </td>
-                      <td className="px-4 py-3 font-mono text-text-secondary">
-                        UPI/327718928312
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-emerald-600">
-                        ₹53,100.00
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Badge variant="success">Confirmed & Logged</Badge>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-surface-tertiary/50">
-                      <td className="px-4 py-3 font-mono font-bold text-text-primary">
-                        HUL/MUM/77321
-                      </td>
-                      <td className="px-4 py-3 text-text-primary">
-                        Hindustan Consumer Products Agency
-                      </td>
-                      <td className="px-4 py-3 font-mono text-text-secondary">
-                        NEFT/20261006/9931
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-emerald-600">
-                        ₹45,076.00
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Badge variant="success">Confirmed & Logged</Badge>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-surface-tertiary/50">
-                      <td className="px-4 py-3 font-mono font-bold text-text-primary">
-                        SKT/OUT/2026/104
-                      </td>
-                      <td className="px-4 py-3 text-text-primary">
-                        Pooja Caterers & Event Organizers
-                      </td>
-                      <td className="px-4 py-3 font-mono text-text-secondary">
-                        UPI/328400192301
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-emerald-600">
-                        ₹61,360.00
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Badge variant="success">Confirmed & Logged</Badge>
-                      </td>
-                    </tr>
+                    {persistedMatches.length > 0 ? (
+                      persistedMatches.map((match) => (
+                        <tr key={match.id} className="hover:bg-surface-tertiary/50">
+                          <td className="px-4 py-3 font-mono font-bold text-text-primary">
+                            {match.id.slice(0, 8)}...
+                          </td>
+                          <td className="px-4 py-3 text-text-secondary font-mono">
+                            {match.created_at ? new Date(match.created_at).toLocaleDateString() : 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-text-primary capitalize">
+                            {(match.match_method || 'manual').replace('_', ' ')}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-emerald-600">
+                            {formatINR(match.allocated_amount)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Badge variant={match.match_status === 'confirmed' ? 'success' : 'outline'}>
+                              {match.match_status.toUpperCase()}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {match.match_status === 'confirmed' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isReversing === match.id}
+                                onClick={() => handleReverseMatch(match.id)}
+                                className="text-xs text-red-600 hover:text-red-700 h-6 px-2"
+                                title="Safely reverse match and restore transaction/invoice balances"
+                              >
+                                <RotateCcw className="h-3 w-3 mr-1" />
+                                {isReversing === match.id ? 'Reversing...' : 'Reverse'}
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-text-secondary">
+                          No confirmed reconciliation matches recorded yet.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

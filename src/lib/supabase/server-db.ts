@@ -287,16 +287,47 @@ export async function importTransactionsBatchServer(
 }
 
 /**
- * Reconciles an invoice and transaction atomically.
+ * Reconciles an invoice and transaction atomically via RPC with fallback to verified multi-step transaction.
  */
 export async function confirmReconciliationMatchServer(
   shopId: string,
   userId: string,
   transactionId: string,
   invoiceId: string,
-  allocatedAmount: string
+  allocatedAmount: string,
+  matchMethod: string = 'manual_confirmed'
 ): Promise<DbReconciliationMatch> {
   const supabase = await createClient();
+
+  // First attempt atomic database procedure: reconcile_match_atomic
+  try {
+    const { data: rpcData, error: rpcError } = await (supabase as any).rpc('reconcile_match_atomic', {
+      p_shop_id: shopId,
+      p_user_id: userId,
+      p_transaction_id: transactionId,
+      p_invoice_id: invoiceId,
+      p_allocated_amount: parseFloat(allocatedAmount),
+      p_match_method: matchMethod,
+    });
+
+    if (!rpcError && rpcData?.match_id) {
+      const { data: matchRecord } = await supabase
+        .from('reconciliation_matches')
+        .select('*')
+        .eq('id', rpcData.match_id)
+        .single();
+      if (matchRecord) {
+        return matchRecord as DbReconciliationMatch;
+      }
+    }
+    if (rpcError && !rpcError.message.includes('function') && !rpcError.message.includes('not found')) {
+      throw new Error(rpcError.message);
+    }
+  } catch (err: any) {
+    if (err?.message && !err.message.includes('function') && !err.message.includes('not found')) {
+      throw err;
+    }
+  }
 
   // Cross-tenant verification: Ensure both transaction and invoice belong to this shop
   const [txnRes, invRes] = await Promise.all([
@@ -311,6 +342,26 @@ export async function confirmReconciliationMatchServer(
   const txn = txnRes.data;
   const inv = invRes.data;
 
+  // Validate allocation amount against available balances
+  const allocDec = money(allocatedAmount);
+  if (allocDec.lte(0)) {
+    throw new Error('Allocated amount must be greater than zero');
+  }
+
+  const currentTxnMatched = money(txn.matched_amount || '0');
+  const totalTxnAmt = money(txn.amount);
+  const remainingTxn = totalTxnAmt.minus(currentTxnMatched);
+  if (allocDec.gt(remainingTxn)) {
+    throw new Error(`Over-allocation: Transaction only has ₹${remainingTxn.toFixed(2)} unmatched balance`);
+  }
+
+  const currentInvPaid = money(inv.amount_paid || '0');
+  const totalInvAmt = money(inv.total_amount);
+  const remainingInvDue = totalInvAmt.minus(currentInvPaid);
+  if (allocDec.gt(remainingInvDue)) {
+    throw new Error(`Over-allocation: Invoice only has ₹${remainingInvDue.toFixed(2)} outstanding balance`);
+  }
+
   // Insert match record
   const { data: match, error: matchError } = await supabase
     .from('reconciliation_matches')
@@ -320,8 +371,12 @@ export async function confirmReconciliationMatchServer(
       invoice_id: invoiceId,
       allocated_amount: parseFloat(allocatedAmount),
       match_status: 'confirmed',
-      match_method: 'manual_confirmed',
+      match_method: matchMethod,
       manual_review_status: 'reviewed',
+      reviewer_id: userId,
+      confirmed_by: userId,
+      reviewed_at: new Date().toISOString(),
+      confirmed_at: new Date().toISOString(),
     } as any)
     .select()
     .single();
@@ -331,36 +386,41 @@ export async function confirmReconciliationMatchServer(
   }
 
   // Update transaction reconciliation status
-  const currentMatched = money(txn.matched_amount || '0');
-  const addMatched = money(allocatedAmount);
-  const newMatched = currentMatched.plus(addMatched);
-  const totalTxnAmt = money(txn.amount);
+  const newMatched = currentTxnMatched.plus(allocDec);
   const newUnmatched = Decimal.max(0, totalTxnAmt.minus(newMatched));
-  const newStatus = newUnmatched.eq(0) ? 'matched' : 'partially_matched';
+  const newTxnStatus = newUnmatched.eq(0) ? 'matched' : 'partially_matched';
 
-  await supabase
+  const { error: txnUpdateError } = await supabase
     .from('transactions')
     .update({
       matched_amount: newMatched.toFixed(2),
       unmatched_amount: newUnmatched.toFixed(2),
-      reconciliation_status: newStatus,
+      reconciliation_status: newTxnStatus,
     } as any)
     .eq('id', transactionId);
 
-  // Update invoice payment status
-  const invTotal = money(inv.total_amount);
-  const invPaid = money(inv.amount_paid || '0').plus(addMatched);
-  const invDue = Decimal.max(0, invTotal.minus(invPaid));
-  const invPaymentStatus = invDue.eq(0) ? 'paid' : 'partially_paid';
+  if (txnUpdateError) {
+    throw new Error(`Failed to update transaction balance: ${txnUpdateError.message}`);
+  }
 
-  await supabase
+  // Update invoice payment status
+  const newInvPaid = currentInvPaid.plus(allocDec);
+  const newInvDue = Decimal.max(0, totalInvAmt.minus(newInvPaid));
+  const invPaymentStatus = newInvDue.eq(0) ? 'paid' : 'partially_paid';
+
+  const { error: invUpdateError } = await supabase
     .from('invoices')
     .update({
-      amount_paid: invPaid.toFixed(2),
-      amount_due: invDue.toFixed(2),
+      amount_paid: newInvPaid.toFixed(2),
+      amount_due: newInvDue.toFixed(2),
+      outstanding_balance: newInvDue.toFixed(2),
       payment_status: invPaymentStatus,
     } as any)
     .eq('id', invoiceId);
+
+  if (invUpdateError) {
+    throw new Error(`Failed to update invoice balance: ${invUpdateError.message}`);
+  }
 
   await logAuditEventServer({
     shopId,
@@ -379,8 +439,106 @@ export async function confirmReconciliationMatchServer(
 }
 
 /**
- * Server-side audit event logging with actor attribution.
+ * Safely reverses a reconciliation match and restores transaction & invoice balances.
  */
+export async function reverseReconciliationMatchServer(
+  shopId: string,
+  userId: string,
+  matchId: string,
+  reason: string = 'User requested match reversal'
+): Promise<{ success: boolean; matchId: string }> {
+  const supabase = await createClient();
+
+  // Try RPC first
+  try {
+    const { data: rpcData, error: rpcError } = await (supabase as any).rpc('reverse_reconciliation_match_atomic', {
+      p_shop_id: shopId,
+      p_user_id: userId,
+      p_match_id: matchId,
+      p_reason: reason,
+    });
+    if (!rpcError && rpcData?.success) {
+      return { success: true, matchId };
+    }
+  } catch {
+    // Continue to application-level rollback if RPC not available
+  }
+
+  // Retrieve match
+  const { data: match, error: matchFetchError } = await supabase
+    .from('reconciliation_matches')
+    .select('*')
+    .eq('id', matchId)
+    .eq('shop_id', shopId)
+    .single();
+
+  if (matchFetchError || !match) {
+    throw new Error('Reconciliation match record not found or unauthorized');
+  }
+
+  if (match.match_status === 'rejected') {
+    throw new Error('This match has already been reversed');
+  }
+
+  const allocAmount = money(match.allocated_amount);
+
+  // Retrieve and update transaction
+  const { data: txn } = await supabase.from('transactions').select('*').eq('id', match.transaction_id).single();
+  if (txn) {
+    const restoredMatched = Decimal.max(0, money(txn.matched_amount || '0').minus(allocAmount));
+    const restoredUnmatched = Decimal.min(money(txn.amount), money(txn.unmatched_amount || '0').plus(allocAmount));
+    const restoredStatus = restoredMatched.eq(0) ? 'unmatched' : 'partially_matched';
+
+    await supabase
+      .from('transactions')
+      .update({
+        matched_amount: restoredMatched.toFixed(2),
+        unmatched_amount: restoredUnmatched.toFixed(2),
+        reconciliation_status: restoredStatus,
+      } as any)
+      .eq('id', txn.id);
+  }
+
+  // Retrieve and update invoice
+  const { data: inv } = await supabase.from('invoices').select('*').eq('id', match.invoice_id).single();
+  if (inv) {
+    const restoredPaid = Decimal.max(0, money(inv.amount_paid || '0').minus(allocAmount));
+    const restoredDue = Decimal.min(money(inv.total_amount), money(inv.amount_due || '0').plus(allocAmount));
+    const restoredStatus = restoredPaid.eq(0) ? 'unpaid' : 'partially_paid';
+
+    await supabase
+      .from('invoices')
+      .update({
+        amount_paid: restoredPaid.toFixed(2),
+        amount_due: restoredDue.toFixed(2),
+        outstanding_balance: restoredDue.toFixed(2),
+        payment_status: restoredStatus,
+      } as any)
+      .eq('id', inv.id);
+  }
+
+  // Mark match as rejected to keep permanent history
+  await supabase
+    .from('reconciliation_matches')
+    .update({
+      match_status: 'rejected',
+      manual_review_status: 'overridden',
+      evidence: `Reversed: ${reason}`,
+    } as any)
+    .eq('id', matchId);
+
+  await logAuditEventServer({
+    shopId,
+    actorId: userId,
+    action: 'reconciliation_reversed',
+    entityType: 'reconciliation_match',
+    entityId: matchId,
+    metadata: { reason, transaction_id: match.transaction_id, invoice_id: match.invoice_id },
+  });
+
+  return { success: true, matchId };
+}
+
 export async function logAuditEventServer(params: {
   shopId?: string | null;
   actorId?: string | null;

@@ -70,8 +70,7 @@ export default function GSTWorkspacePage() {
         body: JSON.stringify({
           year: selectedPeriod.year,
           month: selectedPeriod.month,
-          summary,
-        }),
+          }),
       });
       if (res.ok) {
         setSnapshotSaved(true);

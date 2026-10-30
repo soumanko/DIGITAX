@@ -110,7 +110,9 @@ export interface Invoice {
   shop_id: string;
   document_id: string | null;
   direction: InvoiceDirection;
-  invoice_type?: 'purchase_tax_invoice' | 'sales_tax_invoice';
+  invoice_type?: 'purchase_tax_invoice' | 'sales_tax_invoice' | 'credit_note' | 'debit_note';
+  invoice_status?: 'draft' | 'issued' | 'cancelled';
+  status?: string;
   invoice_number: string;
   invoice_date: string;
   due_date?: string;
