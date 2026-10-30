@@ -51,6 +51,7 @@ export default function OnboardingPage() {
   const [pincode, setPincode] = useState('400001');
   const [taxpayerScheme, setTaxpayerScheme] = useState<'regular' | 'composition_goods' | 'qrmp'>('regular');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGstinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.toUpperCase();
@@ -64,32 +65,57 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleComplete = (e: React.FormEvent) => {
+  const handleComplete = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
-    // Save shop configuration in localStorage / cookie for immediate demo persistence
-    const shopData = {
-      id: 'shop-demo-001',
+    const stateObj = INDIAN_STATES.find(s => s.code === stateCode);
+    const shopPayload = {
       name: businessName,
-      gstin: isGstRegistered ? gstin : null,
+      gstin: isGstRegistered ? gstin.trim() : null,
       business_type: businessType,
       state_code: stateCode,
-      state: INDIAN_STATES.find(s => s.code === stateCode)?.name || 'Maharashtra',
+      state: stateObj?.name || 'Maharashtra',
       city,
       pincode,
       taxpayer_scheme: taxpayerScheme,
-      onboarding_completed: true,
     };
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('digitax_active_shop', JSON.stringify(shopData));
-      document.cookie = 'digitax_demo_session=true; path=/; max-age=86400; SameSite=Lax';
-    }
+    try {
+      const res = await fetch('/api/shops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(shopPayload),
+      });
 
-    setTimeout(() => {
+      const data = await res.json();
+
+      if (!res.ok) {
+        // If unauthenticated or demo session in dev, fall back gracefully to local dev preview
+        if (res.status === 401 && typeof window !== 'undefined') {
+          const isDemo = document.cookie.includes('digitax_demo_session=true');
+          if (isDemo) {
+            localStorage.setItem('digitax_active_shop', JSON.stringify({ ...shopPayload, id: 'shop-demo-001', onboarding_completed: true }));
+            router.push('/dashboard');
+            return;
+          }
+        }
+        setError(data.error || 'Failed to save shop profile. Please verify your inputs.');
+        setLoading(false);
+        return;
+      }
+
+      // Persist active shop ID for fast client caching
+      if (typeof window !== 'undefined' && data.shop) {
+        localStorage.setItem('digitax_active_shop', JSON.stringify(data.shop));
+      }
+
       router.push('/dashboard');
-    }, 600);
+    } catch (err: any) {
+      setError(err?.message || 'Network error saving shop profile. Please check your connection.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -119,6 +145,12 @@ export default function OnboardingPage() {
           </CardHeader>
 
           <CardContent className="pt-6">
+            {error && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+                <Info className="h-4 w-4 shrink-0 mt-0.5 text-red-600" />
+                <span>{error}</span>
+              </div>
+            )}
             <form onSubmit={handleComplete} className="space-y-5">
               {/* GSTIN or Unregistered toggle */}
               <div className="space-y-2">

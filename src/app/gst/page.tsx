@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -22,16 +22,67 @@ import {
 } from 'lucide-react';
 
 export default function GSTWorkspacePage() {
+  const [shop, setShop] = useState(DEMO_SHOP);
+  const [invoices, setInvoices] = useState(DEMO_INVOICES);
   const [selectedPeriod, setSelectedPeriod] = useState({ year: 2026, month: 10 });
   const [activeTab, setActiveTab] = useState<'gstr3b' | 'gstr1' | 'itc_ledger'>('gstr3b');
+  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
+  const [snapshotSaved, setSnapshotSaved] = useState(false);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [shopRes, invRes] = await Promise.all([
+          fetch('/api/shops'),
+          fetch('/api/invoices'),
+        ]);
+        if (shopRes.ok) {
+          const shopData = await shopRes.json();
+          if (shopData.shop) setShop(shopData.shop);
+        }
+        if (invRes.ok) {
+          const invData = await invRes.json();
+          if (Array.isArray(invData.invoices) && invData.invoices.length > 0) {
+            setInvoices(invData.invoices);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not load remote GST records, maintaining current view:', e);
+      }
+    }
+    loadData();
+  }, []);
 
   // Compute live deterministic GST summary using our GST engine
   const summary = generateGSTPeriodSummary(
-    DEMO_SHOP.id,
+    shop.id,
     selectedPeriod.year,
     selectedPeriod.month,
-    DEMO_INVOICES
+    invoices
   );
+
+  const handleSaveSnapshot = async () => {
+    setIsSavingSnapshot(true);
+    try {
+      const res = await fetch('/api/gst/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          year: selectedPeriod.year,
+          month: selectedPeriod.month,
+          summary,
+        }),
+      });
+      if (res.ok) {
+        setSnapshotSaved(true);
+        setTimeout(() => setSnapshotSaved(false), 4000);
+      }
+    } catch (e) {
+      console.warn('Snapshot persistence notice:', e);
+    } finally {
+      setIsSavingSnapshot(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -356,7 +407,7 @@ export default function GSTWorkspacePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {DEMO_INVOICES.filter(i => i.invoice_type === 'purchase_tax_invoice').map((inv) => (
+                    {invoices.filter(i => i.invoice_type === 'purchase_tax_invoice' || i.direction === 'purchase').map((inv) => (
                       <tr key={inv.id} className="hover:bg-surface-tertiary/50">
                         <td className="px-4 py-3 font-semibold text-text-primary">
                           {inv.supplier_legal_name}

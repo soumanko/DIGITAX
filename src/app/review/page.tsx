@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -23,6 +23,23 @@ import {
 export default function ReviewCenterPage() {
   const [invoices, setInvoices] = useState(DEMO_INVOICES);
   const [resolvedIds, setResolvedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function loadInvoices() {
+      try {
+        const res = await fetch('/api/invoices');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.invoices) && data.invoices.length > 0) {
+            setInvoices(data.invoices);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load invoices for review:', err);
+      }
+    }
+    loadInvoices();
+  }, []);
 
   const pendingInvoices = invoices.filter(
     (inv) =>

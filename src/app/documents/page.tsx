@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import {
   Filter,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   Clock,
   Sparkles,
   Eye,
@@ -33,81 +34,134 @@ export default function DocumentsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [newInvNum, setNewInvNum] = useState('');
+  const [newInvParty, setNewInvParty] = useState('');
+  const [newInvGstin, setNewInvGstin] = useState('');
+  const [newInvTaxable, setNewInvTaxable] = useState('10000.00');
+  const [newInvRate, setNewInvRate] = useState('18');
+  const [newInvDirection, setNewInvDirection] = useState<'purchase' | 'sales'>('purchase');
+
   const filteredInvoices = invoices.filter((inv) => {
     const matchesSearch =
       inv.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (inv.supplier_legal_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (inv.customer_legal_name || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-    if (filterType === 'purchase') return matchesSearch && inv.invoice_type === 'purchase_tax_invoice';
-    if (filterType === 'sales') return matchesSearch && inv.invoice_type === 'sales_tax_invoice';
-    return matchesSearch;
+      Boolean(inv.supplier_legal_name && inv.supplier_legal_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      Boolean(inv.customer_legal_name && inv.customer_legal_name.toLowerCase().includes(searchTerm.toLowerCase()));
+    if (!matchesSearch) return false;
+    if (filterType === 'purchase') return inv.invoice_type?.startsWith('purchase') ?? true;
+    if (filterType === 'sales') return inv.invoice_type?.startsWith('sales') ?? true;
+    return true;
   });
 
-  const handleSimulatedUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    async function loadInvoices() {
+      try {
+        const res = await fetch('/api/invoices');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.invoices) && data.invoices.length > 0) {
+            setInvoices(data.invoices);
+            setSelectedInvoice(data.invoices[0]);
+          }
+        }
+      } catch (e) {
+        console.warn('Could not load invoices from API:', e);
+      }
+    }
+    loadInvoices();
+  }, []);
+
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
     setUploadSuccess(false);
+    setUploadError(null);
 
-    // Simulate OCR Extraction pipeline with confidence scoring
-    setTimeout(() => {
-      const newInvoice: Invoice = {
-        id: `inv-sim-${Date.now()}`,
-        document_id: `doc-sim-${Date.now()}`,
-        shop_id: 'shop-demo-001',
-        direction: 'purchase',
-        invoice_number: `ITC/2026/${Math.floor(1000 + Math.random() * 9000)}`,
-        invoice_date: new Date().toISOString().split('T')[0],
-        due_date: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
-        invoice_type: 'purchase_tax_invoice',
-        supplier_name: 'ITC Limited Foods Division',
-        supplier_gstin: '27AAACI1681G1Z1',
-        supplier_legal_name: 'ITC Limited Foods Division',
-        supplier_trade_name: 'ITC Wholesale Hub',
-        supplier_address: 'Kurla West, Mumbai 400070',
-        buyer_name: 'Shree Krishna Traders',
-        buyer_gstin: '27AABCS1429B1ZB',
-        customer_gstin: '27AABCS1429B1ZB',
-        customer_legal_name: 'Shree Krishna Traders',
-        customer_trade_name: 'Shree Krishna Traders',
-        customer_address: 'Shop No. 4, Station Road, Dadar West, Mumbai 400028',
-        place_of_supply_state_code: '27',
-        is_inter_state: false,
-        is_reverse_charge: false,
-        subtotal: '22400.00',
-        discount_total: '0.00',
-        taxable_value: '22400.00',
-        cgst_total: '1344.00',
-        cgst_amount: '1344.00',
-        sgst_total: '1344.00',
-        sgst_amount: '1344.00',
-        igst_total: '0.00',
-        igst_amount: '0.00',
-        cess_total: '0.00',
-        cess_amount: '0.00',
-        total_tax_amount: '2688.00',
-        round_off_amount: '0.00',
-        total_amount: '25088.00',
-        amount_paid: '0.00',
-        paid_amount: '0.00',
-        amount_due: '25088.00',
-        outstanding_balance: '25088.00',
-        payment_status: 'unpaid',
-        review_state: 'pending_review',
-        extraction_confidence: 0.92,
-        needs_review_reasons: ['Verify 12% GST rate on Aashirvaad Atta / Sunfeast'],
-        notes: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('document_type', filterType === 'sales' ? 'sales_invoice' : 'purchase_invoice');
 
-      setInvoices([newInvoice, ...invoices]);
-      setSelectedInvoice(newInvoice);
-      setIsUploading(false);
+    try {
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setUploadError(data.error || 'Failed to upload document');
+        setIsUploading(false);
+        return;
+      }
+
       setUploadSuccess(true);
-    }, 1200);
+      // Pre-fill manual invoice entry with file name
+      setNewInvNum(file.name.replace(/\.[^/.]+$/, '').toUpperCase());
+      setShowManualModal(true);
+    } catch (err: any) {
+      setUploadError(err?.message || 'Error uploading document to server');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleCreateManualInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const taxable = parseFloat(newInvTaxable) || 0;
+    const rate = parseFloat(newInvRate) || 18;
+    const taxAmt = (taxable * rate) / 100;
+    const halfTax = (taxAmt / 2).toFixed(2);
+    const total = (taxable + taxAmt).toFixed(2);
+
+    const payload = {
+      invoice_number: newInvNum || `INV-${Date.now()}`,
+      invoice_date: new Date().toISOString().split('T')[0],
+      direction: newInvDirection,
+      supplier_name: newInvDirection === 'purchase' ? newInvParty || 'Wholesale Supplier' : undefined,
+      supplier_gstin: newInvDirection === 'purchase' ? (newInvGstin || undefined) : undefined,
+      buyer_name: newInvDirection === 'sales' ? newInvParty || 'Retail Counter' : undefined,
+      buyer_gstin: newInvDirection === 'sales' ? (newInvGstin || undefined) : undefined,
+      subtotal: taxable.toFixed(2),
+      taxable_value: taxable.toFixed(2),
+      cgst_total: halfTax,
+      sgst_total: halfTax,
+      igst_total: '0.00',
+      total_amount: total,
+      lines: [
+        {
+          description: `${newInvDirection === 'purchase' ? 'Stock Inward' : 'Retail Sales'} (GST ${rate}%)`,
+          taxable_value: taxable.toFixed(2),
+          gst_rate: rate.toString(),
+          cgst_amount: halfTax,
+          sgst_amount: halfTax,
+          igst_amount: '0.00',
+          total_amount: total,
+        },
+      ],
+    };
+
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.invoice) {
+          setInvoices([data.invoice, ...invoices]);
+          setSelectedInvoice(data.invoice);
+        }
+      }
+    } catch (err) {
+      console.warn('Invoice API save notice:', err);
+    }
+
+    setShowManualModal(false);
   };
 
   const handleConfirmInvoice = (invId: string) => {
@@ -135,33 +189,58 @@ export default function DocumentsPage() {
             </p>
           </div>
 
-          <div className="relative">
-            <input
-              type="file"
-              id="file-upload"
-              accept="image/*,application/pdf"
-              onChange={handleSimulatedUpload}
-              className="hidden"
-            />
-            <label htmlFor="file-upload">
-              <Button
-                variant="primary"
-                size="sm"
-                className="cursor-pointer shadow-xs"
-                isLoading={isUploading}
-              >
-                <UploadCloud className="h-4 w-4 mr-1.5" />
-                {isUploading ? 'Extracting OCR...' : 'Upload Purchase / Sales Bill'}
-              </Button>
-            </label>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setNewInvNum(`INV-${Date.now().toString().slice(-6)}`);
+                setShowManualModal(true);
+              }}
+            >
+              + Manual Invoice
+            </Button>
+
+            <div className="relative">
+              <input
+                type="file"
+                id="file-upload"
+                accept="image/*,application/pdf"
+                onChange={handleDocumentUpload}
+                className="hidden"
+              />
+              <label htmlFor="file-upload">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="cursor-pointer shadow-xs"
+                  isLoading={isUploading}
+                >
+                  <UploadCloud className="h-4 w-4 mr-1.5" />
+                  {isUploading ? 'Uploading & Processing...' : 'Upload Document'}
+                </Button>
+              </label>
+            </div>
           </div>
         </div>
+
+        {uploadError && (
+          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-300 flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+              <strong>Upload error:</strong> {uploadError}
+            </span>
+            <button onClick={() => setUploadError(null)} className="text-red-700 hover:underline font-bold">
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {uploadSuccess && (
           <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between animate-fade-in">
             <span className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-              <strong>OCR Extraction Succeeded:</strong> ITC Limited invoice processed with 92% confidence score.
+              <strong>Document Uploaded:</strong> Stored securely in shop repository and ready for extraction review.
             </span>
             <button onClick={() => setUploadSuccess(false)} className="text-emerald-700 hover:underline font-bold">
               Dismiss
@@ -427,6 +506,146 @@ export default function DocumentsPage() {
             )}
           </div>
         </div>
+
+        {/* Manual Invoice Entry Modal */}
+        {showManualModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+            <div className="bg-surface border border-border rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h3 className="text-lg font-bold text-text-primary">Create Invoice Record</h3>
+                <button
+                  onClick={() => setShowManualModal(false)}
+                  className="text-text-tertiary hover:text-text-primary"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateManualInvoice} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-text-secondary block mb-1">
+                      Invoice Direction
+                    </label>
+                    <select
+                      value={newInvDirection}
+                      onChange={(e) => setNewInvDirection(e.target.value as 'purchase' | 'sales')}
+                      className="w-full text-xs rounded-lg border border-border bg-surface px-3 py-2 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      <option value="purchase">Purchase (Inward / ITC)</option>
+                      <option value="sales">Sales (Outward / Tax Liability)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-text-secondary block mb-1">
+                      Invoice Number
+                    </label>
+                    <Input
+                      value={newInvNum}
+                      onChange={(e) => setNewInvNum(e.target.value)}
+                      placeholder="e.g. INV-2024-001"
+                      className="text-xs h-9"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-text-secondary block mb-1">
+                      {newInvDirection === 'purchase' ? 'Supplier Name' : 'Customer Name'}
+                    </label>
+                    <Input
+                      value={newInvParty}
+                      onChange={(e) => setNewInvParty(e.target.value)}
+                      placeholder={newInvDirection === 'purchase' ? 'Supplier Business' : 'Customer Name'}
+                      className="text-xs h-9"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-text-secondary block mb-1">
+                      GSTIN (Optional)
+                    </label>
+                    <Input
+                      value={newInvGstin}
+                      onChange={(e) => setNewInvGstin(e.target.value.toUpperCase())}
+                      placeholder="27ABCDE1234F1Z5"
+                      className="text-xs h-9 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-text-secondary block mb-1">
+                      Taxable Value (₹)
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={newInvTaxable}
+                      onChange={(e) => setNewInvTaxable(e.target.value)}
+                      className="text-xs h-9"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-text-secondary block mb-1">
+                      GST Rate (%)
+                    </label>
+                    <select
+                      value={newInvRate}
+                      onChange={(e) => setNewInvRate(e.target.value)}
+                      className="w-full text-xs rounded-lg border border-border bg-surface px-3 py-2 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      <option value="0">0% (Nil / Exempt)</option>
+                      <option value="5">5% (CGST 2.5% + SGST 2.5%)</option>
+                      <option value="12">12% (CGST 6% + SGST 6%)</option>
+                      <option value="18">18% (CGST 9% + SGST 9%)</option>
+                      <option value="28">28% (CGST 14% + SGST 14%)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-surface-secondary rounded-lg border border-border text-xs space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-text-secondary">Estimated Tax:</span>
+                    <span className="font-semibold text-text-primary">
+                      {formatINR(((parseFloat(newInvTaxable) || 0) * (parseFloat(newInvRate) || 0)) / 100)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-secondary">Total Amount:</span>
+                    <span className="font-bold text-primary-600">
+                      {formatINR(
+                        (parseFloat(newInvTaxable) || 0) +
+                          ((parseFloat(newInvTaxable) || 0) * (parseFloat(newInvRate) || 0)) / 100
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowManualModal(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary" size="sm">
+                    Save Invoice Record
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

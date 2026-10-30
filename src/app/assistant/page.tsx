@@ -24,10 +24,11 @@ import {
 } from 'lucide-react';
 
 export default function AssistantPage() {
+  const [shopName, setShopName] = useState('Your Business');
   const [messages, setMessages] = useState<GnaniMessage[]>([
     {
       role: 'assistant',
-      content: `नमस्ते! I am your DIGITAX GST Copilot for **${DEMO_SHOP.name}**, powered by GNANI EVON V3.3.\n\nI can answer questions regarding your October 2026 sales invoices, eligible Input Tax Credit (ITC), bank statement reconciliation, and GST return preparation. You can speak or type in English, हिंदी, বাংলা, or मराठी.`,
+      content: 'नमस्ते! I am your DIGITAX GST Copilot, powered by GNANI EVON V3.3.\n\nI can answer questions regarding your sales invoices, eligible Input Tax Credit (ITC), bank statement reconciliation, and GST return preparation. You can speak or type in English, हिंदी, বাংলা, or मराठी.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -35,8 +36,25 @@ export default function AssistantPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    async function loadShop() {
+      try {
+        const res = await fetch('/api/shops');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.shop?.name) {
+            setShopName(data.shop.name);
+          }
+        }
+      } catch (e) {}
+    }
+    loadShop();
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -57,25 +75,27 @@ export default function AssistantPage() {
     setIsThinking(true);
 
     try {
-      const assistantContext = {
-        shopName: DEMO_SHOP.name,
-        gstin: DEMO_SHOP.gstin,
-        state: DEMO_SHOP.state,
-        taxpayerScheme: DEMO_SHOP.taxpayer_scheme,
-        unreconciledCount: DEMO_TRANSACTIONS.filter((t) => t.reconciliation_status === 'unmatched').length,
-        openInvoicesTotal: '21,830.00',
-        currentPeriod: 'October 2026',
-      };
+      const res = await fetch('/api/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: newMessages,
+          language,
+        }),
+      });
 
-      const result = await askGnaniEvon(newMessages, assistantContext, language);
+      if (!res.ok) {
+        throw new Error('Assistant API returned an error');
+      }
 
+      const result = await res.json();
       setMessages([...newMessages, { role: 'assistant', content: result.text }]);
-    } catch (err) {
+    } catch (err: any) {
       setMessages([
         ...newMessages,
         {
           role: 'assistant',
-          content: 'Sorry, I encountered a brief error connecting to the model. Please check your query or try again.',
+          content: 'Sorry, I encountered a temporary connection issue. Please check your query or verify network connectivity.',
         },
       ]);
     } finally {
@@ -84,22 +104,70 @@ export default function AssistantPage() {
   };
 
   const handleVoiceToggle = () => {
+    setVoiceError(null);
+
     if (isRecording) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
       setIsRecording(false);
-    } else {
-      setIsRecording(true);
-      // Simulate Indic Speech-to-Text via GNANI PRISMA
-      setTimeout(() => {
+      return;
+    }
+
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setVoiceError('Speech recognition is not supported in this browser. Please use Chrome, Edge, or type your query.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+
+      const langMap: Record<string, string> = {
+        hi: 'hi-IN',
+        mr: 'mr-IN',
+        bn: 'bn-IN',
+        en: 'en-IN',
+      };
+      recognition.lang = langMap[language] || 'en-IN';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((result: any) => result[0].transcript)
+          .join('');
+        setInput(transcript);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error event:', event.error);
+        if (event.error === 'not-allowed') {
+          setVoiceError('Microphone permission was denied. Please allow microphone access in your browser settings.');
+        } else if (event.error !== 'no-speech') {
+          setVoiceError(`Voice capture error: ${event.error}`);
+        }
         setIsRecording(false);
-        const sampleQuery =
-          language === 'hi'
-            ? 'मेरा इस महीने का कुल इनपुट टैक्स क्रेडिट कितना है?'
-            : language === 'mr'
-            ? 'चालू महिन्यातील एकूण ITC किती आहे?'
-            : 'What is my total eligible ITC for October?';
-        setInput(sampleQuery);
-        handleSend(sampleQuery);
-      }, 2500);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognition.start();
+    } catch (err: any) {
+      console.warn('Could not start speech recognition:', err);
+      setVoiceError(err?.message || 'Could not access microphone.');
+      setIsRecording(false);
     }
   };
 
@@ -109,9 +177,16 @@ export default function AssistantPage() {
         window.speechSynthesis.cancel();
         setIsPlayingAudio(false);
       } else {
-        const utterance = new SpeechSynthesisUtterance(text.replace(/[*#]/g, ''));
-        utterance.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
+        const utterance = new SpeechSynthesisUtterance(text.replace(/[*#_]/g, ''));
+        const langMap: Record<string, string> = {
+          hi: 'hi-IN',
+          mr: 'mr-IN',
+          bn: 'bn-IN',
+          en: 'en-IN',
+        };
+        utterance.lang = langMap[language] || 'en-IN';
         utterance.onend = () => setIsPlayingAudio(false);
+        utterance.onerror = () => setIsPlayingAudio(false);
         window.speechSynthesis.speak(utterance);
         setIsPlayingAudio(true);
       }

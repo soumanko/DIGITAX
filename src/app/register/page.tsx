@@ -18,6 +18,7 @@ export default function RegisterPage() {
   const [preferredLanguage, setPreferredLanguage] = useState<'en' | 'hi' | 'bn' | 'mr'>('en');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmationNeeded, setConfirmationNeeded] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,27 +36,28 @@ export default function RegisterPage() {
             shop_name: shopName,
             preferred_language: preferredLanguage,
           },
+          emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/confirm?next=/onboarding`,
         },
       });
 
       if (signUpError) {
-        if (signUpError.message.includes('fetch') || signUpError.message.includes('dummy')) {
-          // Fallback to local demo session
-          document.cookie = 'digitax_demo_session=true; path=/; max-age=86400; SameSite=Lax';
-          router.push('/onboarding');
-          return;
-        }
         setError(signUpError.message);
         setLoading(false);
         return;
       }
 
-      // Successful registration proceeds to shop onboarding
-      document.cookie = 'digitax_demo_session=true; path=/; max-age=86400; SameSite=Lax';
+      // If email confirmation is required, session will be null
+      if (data?.user && !data.session) {
+        setConfirmationNeeded(true);
+        setLoading(false);
+        return;
+      }
+
+      // Successful registration with active session proceeds to shop onboarding
       router.push('/onboarding');
     } catch (err: any) {
-      document.cookie = 'digitax_demo_session=true; path=/; max-age=86400; SameSite=Lax';
-      router.push('/onboarding');
+      setError(err?.message || 'Registration service is unavailable. Please check your network connection.');
+      setLoading(false);
     }
   };
 
@@ -82,14 +84,33 @@ export default function RegisterPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <Card className="shadow-lg border-border">
           <CardContent className="pt-6">
-            {error && (
-              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{error}</span>
+            {confirmationNeeded ? (
+              <div className="text-center py-6 space-y-3">
+                <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <h3 className="text-base font-bold text-text-primary">Verify your business email</h3>
+                <p className="text-xs text-text-secondary max-w-sm mx-auto">
+                  We have sent a verification link to <strong className="text-text-primary">{email}</strong>. Please check your inbox and click the link to activate your shop account.
+                </p>
+                <div className="pt-4 space-y-2">
+                  <Link href="/login">
+                    <Button variant="primary" className="w-full">
+                      Proceed to Sign In
+                    </Button>
+                  </Link>
+                </div>
               </div>
-            )}
+            ) : (
+              <>
+                {error && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                )}
 
-            <form onSubmit={handleRegister} className="space-y-4">
+                <form onSubmit={handleRegister} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1">
                   Owner / Manager Full Name
@@ -170,7 +191,9 @@ export default function RegisterPage() {
                 </Button>
               </div>
             </form>
-          </CardContent>
+          </>
+        )}
+      </CardContent>
           <CardFooter className="border-t border-border bg-surface-secondary/50 py-3 text-center text-xs text-text-tertiary">
             <span className="flex items-center justify-center gap-1 w-full">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />

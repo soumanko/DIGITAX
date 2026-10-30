@@ -12,7 +12,11 @@ import { ShieldCheck, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectPath = searchParams.get('redirect') || '/dashboard';
+  // Sanitize redirect path to prevent open redirects (must be local relative path)
+  const rawRedirect = searchParams.get('redirect');
+  const redirectPath = rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') && !rawRedirect.includes('://')
+    ? rawRedirect
+    : '/dashboard';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,15 +36,6 @@ function LoginForm() {
       });
 
       if (signInError) {
-        if (
-          signInError.message.includes('fetch') ||
-          signInError.message.includes('network') ||
-          signInError.message.includes('dummy')
-        ) {
-          document.cookie = 'digitax_demo_session=true; path=/; max-age=86400; SameSite=Lax';
-          router.push(redirectPath);
-          return;
-        }
         setError(signInError.message);
         setLoading(false);
         return;
@@ -48,12 +43,13 @@ function LoginForm() {
 
       router.push(redirectPath);
     } catch (err: any) {
-      document.cookie = 'digitax_demo_session=true; path=/; max-age=86400; SameSite=Lax';
-      router.push(redirectPath);
+      setError(err?.message || 'Authentication service is unavailable. Please check your connection and credentials.');
+      setLoading(false);
     }
   };
 
   const handleDemoSignIn = () => {
+    // Explicit demo sandbox session (isolated testing mode)
     document.cookie = 'digitax_demo_session=true; path=/; max-age=86400; SameSite=Lax';
     router.push('/dashboard');
   };

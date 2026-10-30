@@ -21,108 +21,43 @@ import {
 
 export default function ExportsPage() {
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [shop, setShop] = useState(DEMO_SHOP);
+  const [invoices, setInvoices] = useState(DEMO_INVOICES);
 
-  const summary = generateGSTPeriodSummary(DEMO_SHOP.id, 2026, 10, DEMO_INVOICES);
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        const [shopRes, invRes] = await Promise.all([
+          fetch('/api/shops'),
+          fetch('/api/invoices'),
+        ]);
+        if (shopRes.ok) {
+          const shopData = await shopRes.json();
+          if (shopData.shop) setShop(shopData.shop);
+        }
+        if (invRes.ok) {
+          const invData = await invRes.json();
+          if (Array.isArray(invData.invoices) && invData.invoices.length > 0) {
+            setInvoices(invData.invoices);
+          }
+        }
+      } catch (e) {}
+    }
+    loadData();
+  }, []);
+
+  const summary = generateGSTPeriodSummary(shop.id, 2026, 10, invoices);
 
   const handleDownloadGSTR1JSON = () => {
     setDownloading('gstr1_json');
-    const gstr1Payload = {
-      gstin: DEMO_SHOP.gstin,
-      fp: '102026',
-      gt: 100560.0,
-      cur_gt: 100560.0,
-      b2b: summary.gstr1.b2b.invoices.map((inv) => ({
-        ctin: inv.customer_gstin,
-        inv: [
-          {
-            inum: inv.invoice_number,
-            idt: inv.invoice_date,
-            val: parseFloat(inv.total_amount),
-            pos: inv.place_of_supply_state_code,
-            rchrg: 'N',
-            itms: [
-              {
-                num: 1,
-                itm_det: {
-                  rt: 18.0,
-                  txval: parseFloat(inv.taxable_value),
-                  camt: parseFloat(inv.cgst_amount || inv.cgst_total || '0.00'),
-                  samt: parseFloat(inv.sgst_amount || inv.sgst_total || '0.00'),
-                  iamt: parseFloat(inv.igst_amount || inv.igst_total || '0.00'),
-                  csamt: 0.0,
-                },
-              },
-            ],
-          },
-        ],
-      })),
-      b2cs: [
-        {
-          sply_ty: 'INTRA',
-          txval: parseFloat(summary.gstr1.b2c_small.taxableValue),
-          rt: 18.0,
-          camt: parseFloat(summary.gstr1.b2c_small.cgst),
-          samt: parseFloat(summary.gstr1.b2c_small.sgst),
-          iamt: 0.0,
-          csamt: 0.0,
-        },
-      ],
-    };
-
-    const blob = new Blob([JSON.stringify(gstr1Payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `GSTR1_${DEMO_SHOP.gstin}_102026.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    setTimeout(() => setDownloading(null), 800);
+    window.location.href = '/api/exports?type=gstr1_json&year=2026&month=10';
+    setTimeout(() => setDownloading(null), 1000);
   };
 
   const handleDownloadGSTR3BCSV = () => {
     setDownloading('gstr3b_csv');
-    const rows = [
-      ['Table', 'Description', 'Taxable Value', 'IGST', 'CGST', 'SGST', 'Cess'],
-      [
-        '3.1(a)',
-        'Outward taxable supplies',
-        summary.gstr3b.outward_supplies.taxableValue,
-        summary.gstr3b.outward_supplies.igst,
-        summary.gstr3b.outward_supplies.cgst,
-        summary.gstr3b.outward_supplies.sgst,
-        '0.00',
-      ],
-      [
-        '4(A)(5)',
-        'Eligible ITC - All Other ITC',
-        '0.00',
-        summary.gstr3b.eligible_itc.all_other_itc.igst,
-        summary.gstr3b.eligible_itc.all_other_itc.cgst,
-        summary.gstr3b.eligible_itc.all_other_itc.sgst,
-        '0.00',
-      ],
-      [
-        '6.1',
-        'Net Tax Payable',
-        '0.00',
-        summary.netTaxPayable.igst,
-        summary.netTaxPayable.cgst,
-        summary.netTaxPayable.sgst,
-        '0.00',
-      ],
-    ];
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + rows.map((e) => e.join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `GSTR3B_Summary_${DEMO_SHOP.gstin}_102026.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    setTimeout(() => setDownloading(null), 800);
+    window.location.href = '/api/exports?type=gstr3b_csv&year=2026&month=10';
+    setTimeout(() => setDownloading(null), 1000);
   };
 
   return (

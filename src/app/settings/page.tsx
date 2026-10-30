@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { DEMO_SHOP } from '@/lib/demo-data';
+import { createClient } from '@/lib/supabase/client';
 import {
   Settings,
   Store,
@@ -27,26 +28,49 @@ export default function SettingsPage() {
   const [scheme, setScheme] = useState(DEMO_SHOP.taxpayer_scheme);
   const [language, setLanguage] = useState(DEMO_SHOP.preferred_language);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('digitax_active_shop');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed.name) setShopName(parsed.name);
-          if (parsed.gstin) setGstin(parsed.gstin);
-          if (parsed.business_type) setBusinessType(parsed.business_type);
-          if (parsed.city) setCity(parsed.city);
-          if (parsed.taxpayer_scheme) setScheme(parsed.taxpayer_scheme);
-          if (parsed.preferred_language) setLanguage(parsed.preferred_language);
-        } catch (e) {}
+    async function loadShop() {
+      try {
+        const res = await fetch('/api/shops');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.shop) {
+            if (data.shop.name) setShopName(data.shop.name);
+            if (data.shop.gstin) setGstin(data.shop.gstin);
+            if (data.shop.business_type) setBusinessType(data.shop.business_type);
+            if (data.shop.city) setCity(data.shop.city);
+            if (data.shop.taxpayer_scheme) setScheme(data.shop.taxpayer_scheme);
+            if (data.shop.preferred_language) setLanguage(data.shop.preferred_language);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load shop from API:', err);
+      }
+
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('digitax_active_shop');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed.name) setShopName(parsed.name);
+            if (parsed.gstin) setGstin(parsed.gstin);
+            if (parsed.business_type) setBusinessType(parsed.business_type);
+            if (parsed.city) setCity(parsed.city);
+            if (parsed.taxpayer_scheme) setScheme(parsed.taxpayer_scheme);
+            if (parsed.preferred_language) setLanguage(parsed.preferred_language);
+          } catch (e) {}
+        }
       }
     }
+    loadShop();
   }, []);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSaving(true);
     const updated = {
       ...DEMO_SHOP,
       name: shopName,
@@ -57,14 +81,31 @@ export default function SettingsPage() {
       preferred_language: language,
     };
 
+    try {
+      await fetch('/api/shops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.warn('API shop save error:', err);
+    }
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('digitax_active_shop', JSON.stringify(updated));
     }
+    setIsSaving(false);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Sign out notice:', err);
+    }
     document.cookie = 'digitax_demo_session=; path=/; max-age=0;';
     window.location.href = '/login';
   };

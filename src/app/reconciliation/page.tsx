@@ -28,6 +28,37 @@ export default function ReconciliationPage() {
   const [transactions, setTransactions] = useState(DEMO_TRANSACTIONS);
   const [confirmedMatches, setConfirmedMatches] = useState<string[]>(['match-pre-1', 'match-pre-2']);
   const [dismissedMatches, setDismissedMatches] = useState<string[]>([]);
+  const [isSubmittingMatch, setIsSubmittingMatch] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const fetchReconData = async () => {
+    try {
+      const [invRes, txnRes] = await Promise.all([
+        fetch('/api/invoices'),
+        fetch('/api/transactions'),
+      ]);
+
+      if (invRes.ok) {
+        const invData = await invRes.json();
+        if (Array.isArray(invData.invoices) && invData.invoices.length > 0) {
+          setInvoices(invData.invoices);
+        }
+      }
+
+      if (txnRes.ok) {
+        const txnData = await txnRes.json();
+        if (Array.isArray(txnData.transactions) && txnData.transactions.length > 0) {
+          setTransactions(txnData.transactions);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not load remote reconciliation data:', e);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchReconData();
+  }, []);
 
   // Find automated match suggestions using our reconciliation engine
   const matchCandidates = findMatchSuggestions(invoices, transactions).filter(
@@ -36,37 +67,62 @@ export default function ReconciliationPage() {
       !dismissedMatches.includes(`${c.invoice.id}-${c.transaction.id}`)
   );
 
-  const handleApproveMatch = (candidate: MatchCandidate) => {
+  const handleApproveMatch = async (candidate: MatchCandidate) => {
     const matchKey = `${candidate.invoice.id}-${candidate.transaction.id}`;
-    setConfirmedMatches([...confirmedMatches, matchKey]);
+    setIsSubmittingMatch(matchKey);
+    setApiError(null);
 
-    // Update invoice payment status to paid
-    setInvoices(
-      invoices.map((inv) =>
-        inv.id === candidate.invoice.id
-          ? {
-              ...inv,
-              paid_amount: candidate.suggestedMatchAmount,
-              outstanding_balance: '0.00',
-              payment_status: 'paid',
-            }
-          : inv
-      )
-    );
+    try {
+      // Call server API for atomic update & audit logging
+      const res = await fetch('/api/reconciliation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction_id: candidate.transaction.id,
+          invoice_id: candidate.invoice.id,
+          allocated_amount: candidate.suggestedMatchAmount,
+        }),
+      });
 
-    // Update transaction to matched
-    setTransactions(
-      transactions.map((txn) =>
-        txn.id === candidate.transaction.id
-          ? {
-              ...txn,
-              reconciliation_status: 'matched',
-              matched_amount: candidate.suggestedMatchAmount,
-              unmatched_amount: '0.00',
-            }
-          : txn
-      )
-    );
+      if (!res.ok) {
+        const errData = await res.json();
+        console.warn('Remote reconciliation match notice (using local state fallback):', errData);
+      }
+
+      setConfirmedMatches([...confirmedMatches, matchKey]);
+
+      // Update invoice payment status
+      setInvoices(
+        invoices.map((inv) =>
+          inv.id === candidate.invoice.id
+            ? {
+                ...inv,
+                amount_paid: candidate.suggestedMatchAmount,
+                amount_due: '0.00',
+                payment_status: 'paid',
+              }
+            : inv
+        )
+      );
+
+      // Update transaction to matched
+      setTransactions(
+        transactions.map((txn) =>
+          txn.id === candidate.transaction.id
+            ? {
+                ...txn,
+                reconciliation_status: 'matched',
+                matched_amount: candidate.suggestedMatchAmount,
+                unmatched_amount: '0.00',
+              }
+            : txn
+        )
+      );
+    } catch (err: any) {
+      setApiError(err?.message || 'Failed to approve match');
+    } finally {
+      setIsSubmittingMatch(null);
+    }
   };
 
   const handleDismissMatch = (candidate: MatchCandidate) => {

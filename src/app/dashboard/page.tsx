@@ -28,32 +28,79 @@ import {
 
 export default function DashboardPage() {
   const [shop, setShop] = useState(DEMO_SHOP);
+  const [invoices, setInvoices] = useState<any[]>(DEMO_INVOICES);
+  const [transactions, setTransactions] = useState<any[]>(DEMO_TRANSACTIONS);
+  const [isDemo, setIsDemo] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [shopRes, invRes, txnRes] = await Promise.all([
+        fetch('/api/shops'),
+        fetch('/api/invoices'),
+        fetch('/api/transactions'),
+      ]);
+
+      if (shopRes.ok) {
+        const shopData = await shopRes.json();
+        if (shopData.needsOnboarding) {
+          window.location.href = '/onboarding';
+          return;
+        }
+        if (shopData.shop) {
+          setShop(shopData.shop);
+          setIsDemo(Boolean(shopData.isDemo));
+        }
+      }
+
+      if (invRes.ok) {
+        const invData = await invRes.json();
+        if (Array.isArray(invData.invoices)) {
+          setInvoices(invData.invoices);
+        }
+      }
+
+      if (txnRes.ok) {
+        const txnData = await txnRes.json();
+        if (Array.isArray(txnData.transactions)) {
+          setTransactions(txnData.transactions);
+        }
+      }
+    } catch (err: any) {
+      console.warn('Dashboard live fetch notice, falling back to local cached view:', err);
+      // Retain existing state if network drops
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('digitax_active_shop');
-      if (saved) {
-        try {
-          setShop({ ...DEMO_SHOP, ...JSON.parse(saved) });
-        } catch (e) {}
-      }
-    }
+    fetchDashboardData();
   }, []);
 
-  const totalInwardTaxable = DEMO_INVOICES
-    .filter(i => i.invoice_type === 'purchase_tax_invoice')
-    .reduce((acc, i) => acc + parseFloat(i.taxable_value), 0);
+  const totalInwardTaxable = invoices
+    .filter(i => i.invoice_type === 'purchase_tax_invoice' || i.direction === 'purchase')
+    .reduce((acc, i) => acc + parseFloat(i.taxable_value || '0'), 0);
 
-  const totalOutwardTaxable = DEMO_INVOICES
-    .filter(i => i.invoice_type === 'sales_tax_invoice')
-    .reduce((acc, i) => acc + parseFloat(i.taxable_value), 0);
+  const totalOutwardTaxable = invoices
+    .filter(i => i.invoice_type === 'sales_tax_invoice' || i.direction === 'sales')
+    .reduce((acc, i) => acc + parseFloat(i.taxable_value || '0'), 0);
 
-  const totalITC = DEMO_INVOICES
-    .filter(i => i.invoice_type === 'purchase_tax_invoice')
-    .reduce((acc, i) => acc + parseFloat(i.total_tax_amount || '0.00'), 0);
+  const totalITC = invoices
+    .filter(i => i.invoice_type === 'purchase_tax_invoice' || i.direction === 'purchase')
+    .reduce((acc, i) => acc + parseFloat(i.total_tax_amount || i.total_tax || '0.00'), 0);
 
-  const pendingReviewCount = DEMO_INVOICES.filter(i => i.review_state === 'pending_review').length;
-  const unmatchedTxnCount = DEMO_TRANSACTIONS.filter(t => t.reconciliation_status === 'unmatched').length;
+  const totalOutwardTax = invoices
+    .filter(i => i.invoice_type === 'sales_tax_invoice' || i.direction === 'sales')
+    .reduce((acc, i) => acc + parseFloat(i.total_tax_amount || i.total_tax || '0.00'), 0);
+
+  const netTaxPayable = Math.max(0, totalOutwardTax - totalITC);
+
+  const pendingReviewCount = invoices.filter(i => i.review_state === 'pending_review').length;
+  const unmatchedTxnCount = transactions.filter(t => t.reconciliation_status === 'unmatched').length;
 
   return (
     <DashboardLayout>
@@ -200,11 +247,13 @@ export default function DashboardPage() {
                 <Calculator className="h-4 w-4 text-purple-600" />
               </div>
               <CardTitle className="text-2xl font-extrabold mt-1 text-primary-600">
-                ₹0.00
+                {formatINR(netTaxPayable)}
               </CardTitle>
             </CardHeader>
             <CardContent className="text-xs text-text-secondary">
-              ITC fully offsets liability (₹4,746 excess credit)
+              {netTaxPayable === 0
+                ? 'ITC fully offsets output GST liability'
+                : 'Net cash tax payment required before GSTR-3B due date'}
             </CardContent>
           </Card>
         </div>
@@ -224,69 +273,83 @@ export default function DashboardPage() {
                 </Link>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
-                      <tr>
-                        <th className="px-4 py-2.5">Invoice #</th>
-                        <th className="px-4 py-2.5">Party</th>
-                        <th className="px-4 py-2.5">Type</th>
-                        <th className="px-4 py-2.5">Amount</th>
-                        <th className="px-4 py-2.5">Status</th>
-                        <th className="px-4 py-2.5 text-right">Review</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {DEMO_INVOICES.map((inv) => (
-                        <tr key={inv.id} className="hover:bg-surface-tertiary/50 transition-colors">
-                          <td className="px-4 py-3 font-mono font-medium text-text-primary">
-                            {inv.invoice_number}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="font-medium text-text-primary">
-                              {inv.invoice_type === 'purchase_tax_invoice'
-                                ? inv.supplier_trade_name || inv.supplier_legal_name
-                                : inv.customer_trade_name || inv.customer_legal_name}
-                            </div>
-                            <div className="font-mono text-[11px] text-text-tertiary">
-                              {inv.invoice_type === 'purchase_tax_invoice' ? inv.supplier_gstin : inv.customer_gstin || 'B2C Retail'}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 capitalize">
-                            {inv.invoice_type === 'purchase_tax_invoice' ? 'Purchase' : 'Sales'}
-                          </td>
-                          <td className="px-4 py-3 font-semibold text-text-primary">
-                            {formatINR(inv.total_amount)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                inv.payment_status === 'paid'
-                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                              }`}
-                            >
-                              {inv.payment_status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Badge
-                              variant={
-                                inv.review_state === 'confirmed'
-                                  ? 'success'
-                                  : inv.review_state === 'pending_review'
-                                  ? 'accent'
-                                  : 'destructive'
-                              }
-                            >
-                              {inv.review_state.replace('_', ' ')}
-                            </Badge>
-                          </td>
+                {invoices.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-text-secondary">
+                    <p className="font-semibold text-text-primary mb-1">No invoices recorded yet</p>
+                    <p className="text-[11px] mb-4">Upload vendor purchase bills or sales receipts to start automated bookkeeping.</p>
+                    <Link href="/documents">
+                      <Button size="sm" variant="primary">
+                        <UploadCloud className="h-3.5 w-3.5 mr-1" /> Upload First Invoice
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
+                        <tr>
+                          <th className="px-4 py-2.5">Invoice #</th>
+                          <th className="px-4 py-2.5">Party</th>
+                          <th className="px-4 py-2.5">Type</th>
+                          <th className="px-4 py-2.5">Amount</th>
+                          <th className="px-4 py-2.5">Status</th>
+                          <th className="px-4 py-2.5 text-right">Review</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {invoices.slice(0, 10).map((inv) => (
+                          <tr key={inv.id} className="hover:bg-surface-tertiary/50 transition-colors">
+                            <td className="px-4 py-3 font-mono font-medium text-text-primary">
+                              {inv.invoice_number}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-text-primary">
+                                {inv.invoice_type === 'purchase_tax_invoice' || inv.direction === 'purchase'
+                                  ? inv.supplier_trade_name || inv.supplier_legal_name || inv.supplier_name || 'Vendor'
+                                  : inv.customer_trade_name || inv.customer_legal_name || inv.customer_name || 'Customer'}
+                              </div>
+                              <div className="font-mono text-[11px] text-text-tertiary">
+                                {inv.invoice_type === 'purchase_tax_invoice' || inv.direction === 'purchase'
+                                  ? inv.supplier_gstin || 'Unregistered'
+                                  : inv.customer_gstin || 'B2C Retail'}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 capitalize">
+                              {inv.invoice_type === 'purchase_tax_invoice' || inv.direction === 'purchase' ? 'Purchase' : 'Sales'}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-text-primary">
+                              {formatINR(inv.total_amount)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  inv.payment_status === 'paid'
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                }`}
+                              >
+                                {inv.payment_status || 'unpaid'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <Badge
+                                variant={
+                                  inv.review_state === 'confirmed'
+                                    ? 'success'
+                                    : inv.review_state === 'pending_review'
+                                    ? 'accent'
+                                    : 'destructive'
+                                }
+                              >
+                                {(inv.review_state || 'confirmed').replace('_', ' ')}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

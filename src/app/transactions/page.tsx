@@ -23,12 +23,36 @@ import {
   HelpCircle
 } from 'lucide-react';
 
+import { parseBankStatementCSV, ParsedCsvTransaction } from '@/lib/csv-parser';
+
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>(DEMO_TRANSACTIONS);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'credit' | 'debit' | 'unmatched'>('all');
   const [showImportModal, setShowImportModal] = useState(false);
-  const [simulatedFileName, setSimulatedFileName] = useState<string | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [parsedPreview, setParsedPreview] = useState<ParsedCsvTransaction[]>([]);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const fetchTransactions = async () => {
+    try {
+      const res = await fetch('/api/transactions');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.transactions) && data.transactions.length > 0) {
+          setTransactions(data.transactions);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch remote transactions, maintaining current view:', e);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchTransactions();
+  }, []);
 
   const filteredTxns = transactions.filter((t) => {
     const matchesSearch =
@@ -36,46 +60,99 @@ export default function TransactionsPage() {
       (t.reference_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (t.category || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-    if (filterType === 'credit') return matchesSearch && t.transaction_type === 'credit';
-    if (filterType === 'debit') return matchesSearch && t.transaction_type === 'debit';
+    if (filterType === 'credit') return matchesSearch && (t.transaction_type === 'credit' || t.direction === 'credit');
+    if (filterType === 'debit') return matchesSearch && (t.transaction_type === 'debit' || t.direction === 'debit');
     if (filterType === 'unmatched') return matchesSearch && t.reconciliation_status === 'unmatched';
     return matchesSearch;
   });
 
-  const handleSimulateCSVImport = () => {
-    setSimulatedFileName('HDFC_Statement_Oct2026.csv');
-    setTimeout(() => {
-      const newTxn: Transaction = {
-        id: `txn-sim-${Date.now()}`,
-        shop_id: 'shop-demo-001',
-        import_batch_id: null,
-        external_txn_id: null,
-        source: 'bank_import',
-        source_account: 'HDFC Current A/c ...8921',
-        bank_account_name: 'HDFC Current A/c ...8921',
-        transaction_date: '2026-10-14',
-        value_date: '2026-10-14',
-        description: 'UPI/3299410921/BRITANNIA DISTRIBUTOR/PAYMENT',
-        reference_number: 'UPI/3299410921',
-        upi_id: null,
-        direction: 'debit',
-        transaction_type: 'debit',
-        amount: '21830.00',
-        category: 'supplier_payment',
-        sub_category: 'Vendor Payment',
-        review_state: 'pending_review',
-        reconciliation_status: 'unmatched',
-        matched_amount: '0.00',
-        unmatched_amount: '21830.00',
-        original_row_data: null,
-        notes: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setTransactions([newTxn, ...transactions]);
-      setShowImportModal(false);
-      setSimulatedFileName(null);
-    }, 1000);
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsParsing(true);
+    setImportErrors([]);
+    setParsedPreview([]);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result as string;
+      const res = parseBankStatementCSV(text);
+      setIsParsing(false);
+
+      if (res.success) {
+        setParsedPreview(res.transactions);
+      } else {
+        setImportErrors(res.errors);
+      }
+    };
+    reader.onerror = () => {
+      setIsParsing(false);
+      setImportErrors(['Error reading CSV file']);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirmImport = async () => {
+    if (parsedPreview.length === 0) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactions: parsedPreview }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.transactions)) {
+          setTransactions([...data.transactions, ...transactions]);
+        }
+        setShowImportModal(false);
+        setParsedPreview([]);
+        setStatusMessage(`Successfully imported ${parsedPreview.length} statement transactions.`);
+        setTimeout(() => setStatusMessage(null), 5000);
+      } else {
+        // Fallback for local demo preview
+        const newTxns: Transaction[] = parsedPreview.map((p, idx) => ({
+          id: `txn-imp-${Date.now()}-${idx}`,
+          shop_id: 'shop-demo-001',
+          import_batch_id: null,
+          external_txn_id: null,
+          source: p.source,
+          source_account: 'Bank Statement Import',
+          bank_account_name: 'Primary Bank A/c',
+          transaction_date: p.transaction_date,
+          value_date: p.transaction_date,
+          description: p.description,
+          reference_number: p.reference_number || null,
+          upi_id: null,
+          direction: p.direction,
+          transaction_type: p.direction,
+          amount: p.amount,
+          category: p.category as any,
+          sub_category: undefined,
+          review_state: 'confirmed' as const,
+          reconciliation_status: 'unmatched' as const,
+          matched_amount: '0.00',
+          unmatched_amount: p.amount,
+          original_row_data: null,
+          notes: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+        setTransactions([...newTxns, ...transactions]);
+        setShowImportModal(false);
+        setParsedPreview([]);
+        setStatusMessage(`Imported ${parsedPreview.length} transactions into current session.`);
+        setTimeout(() => setStatusMessage(null), 5000);
+      }
+    } catch (err: any) {
+      setImportErrors([err?.message || 'Failed to import transactions']);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -226,51 +303,78 @@ export default function TransactionsPage() {
           </CardContent>
         </Card>
 
-        {/* Simulated CSV Import Modal */}
+        {/* Real CSV Import Modal */}
         {showImportModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
-            <Card className="max-w-lg w-full shadow-2xl border-border">
+            <Card className="max-w-xl w-full shadow-2xl border-border">
               <CardHeader className="border-b border-border pb-3">
                 <CardTitle className="text-base font-bold flex items-center gap-2">
                   <FileSpreadsheet className="h-5 w-5 text-primary-600" />
                   Import Bank / UPI Statement CSV
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Upload standard bank export statements (HDFC, SBI, ICICI, PhonePe, Paytm QR).
+                  Upload standard bank export statements (HDFC, SBI, ICICI, Axis, PhonePe, Paytm QR).
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4 space-y-4 text-xs">
-                <div className="p-4 rounded-xl border-2 border-dashed border-border text-center space-y-2 bg-surface-secondary/40">
+                {importErrors.length > 0 && (
+                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300">
+                    {importErrors.map((err, i) => (
+                      <div key={i}>{err}</div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="p-4 rounded-xl border-2 border-dashed border-border text-center space-y-2 bg-surface-secondary/40 relative">
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
                   <UploadCloud className="h-8 w-8 text-primary-600 mx-auto" />
                   <div className="font-semibold text-text-primary">
-                    Drop CSV here, or browse files
+                    {isParsing ? 'Parsing statement CSV...' : 'Click to select CSV file, or drag & drop'}
                   </div>
                   <div className="text-[11px] text-text-tertiary">
-                    Supports HDFC, ICICI, Axis, SBI, PhonePe Merchant exports (.csv, .xlsx)
+                    Parses dates, narrations, debits, credits, and UTR reference codes automatically
                   </div>
                 </div>
 
-                <div className="p-3 rounded-lg bg-surface-secondary border border-border space-y-2">
-                  <div className="font-bold text-text-primary">Detected Column Mappings:</div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div>Date: <span className="font-mono text-emerald-600">Txn Date</span></div>
-                    <div>Narration: <span className="font-mono text-emerald-600">Description</span></div>
-                    <div>Debit/Credit: <span className="font-mono text-emerald-600">Amount / Type</span></div>
-                    <div>Ref/UTR: <span className="font-mono text-emerald-600">Reference No</span></div>
+                {parsedPreview.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between font-bold text-text-primary">
+                      <span>Statement Preview ({parsedPreview.length} rows found)</span>
+                      <span className="text-[11px] font-normal text-text-secondary">Ready to import</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
+                      {parsedPreview.slice(0, 15).map((row, idx) => (
+                        <div key={idx} className="p-2 flex items-center justify-between text-[11px] hover:bg-surface-secondary">
+                          <div>
+                            <span className="font-mono text-text-tertiary mr-2">{row.transaction_date}</span>
+                            <span className="font-medium text-text-primary">{row.description}</span>
+                          </div>
+                          <span className={`font-mono font-semibold ${row.direction === 'credit' ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {row.direction === 'credit' ? '+' : '-'}₹{row.amount}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <div className="flex justify-end gap-2 pt-2">
+                <div className="flex justify-end gap-2 pt-2 border-t border-border">
                   <Button variant="ghost" size="sm" onClick={() => setShowImportModal(false)}>
                     Cancel
                   </Button>
                   <Button
                     variant="primary"
                     size="sm"
-                    onClick={handleSimulateCSVImport}
-                    isLoading={!!simulatedFileName}
+                    onClick={handleConfirmImport}
+                    disabled={parsedPreview.length === 0}
+                    isLoading={isSubmitting}
                   >
-                    {simulatedFileName ? 'Parsing & Mapping...' : 'Import Sample HDFC Statement'}
+                    Confirm Import ({parsedPreview.length} Transactions)
                   </Button>
                 </div>
               </CardContent>
