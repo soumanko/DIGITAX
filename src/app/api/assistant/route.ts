@@ -5,6 +5,7 @@ import {
   getShopTransactionsServer,
 } from '@/lib/supabase/server-db';
 import { askGnaniEvon, AssistantContext } from '@/lib/ai/gnani';
+import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 import { DEMO_SHOP, DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
 
 export async function POST(request: NextRequest) {
@@ -13,6 +14,27 @@ export async function POST(request: NextRequest) {
     const isDev = process.env.NODE_ENV !== 'production';
 
     const ctx = await getAuthenticatedContext();
+    if (!ctx.userId) {
+      if (isDemoCookie && isDev) {
+        // Rate limit demo assistant: 5 per minute per IP (strict)
+        const forwardedFor = request.headers.get('x-forwarded-for');
+        const ip = forwardedFor ? forwardedFor.split(',')[0].trim() : 'unknown';
+        const rateLimit = rateLimiters.strict(`assistant-demo:${ip}`);
+        const limitResponse = rateLimitResponse(rateLimit);
+        if (limitResponse.blocked) {
+          return limitResponse.response as Response;
+        }
+      } else {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    } else {
+      // Rate limit assistant: 5 per minute per user (strict, AI operations are expensive)
+      const rateLimit = rateLimiters.strict(`assistant:${ctx.userId}`);
+      const limitResponse = rateLimitResponse(rateLimit);
+      if (limitResponse.blocked) {
+        return limitResponse.response as Response;
+      }
+    }
 
     let assistantContext: AssistantContext;
 
@@ -67,8 +89,8 @@ export async function POST(request: NextRequest) {
     const reply = await askGnaniEvon(boundedMessages, assistantContext, language);
 
     return NextResponse.json(reply);
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error in assistant API:', err);
-    return NextResponse.json({ error: err?.message || 'Assistant service failed' }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Assistant service failed' }, { status: 500 });
   }
 }

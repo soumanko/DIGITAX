@@ -207,6 +207,7 @@ export const confirmInvoiceSchema = z.object({
   cess_total: positiveMoneySchema.default('0'),
   total_amount: positiveMoneySchema,
   notes: z.string().max(1000).optional(),
+  review_state: z.enum(['draft', 'pending_review', 'confirmed', 'corrected', 'rejected', 'needs_clarification', 'approved']).default('pending_review'),
   lines: z.array(invoiceLineSchema).min(1, 'At least one line item is required'),
 });
 

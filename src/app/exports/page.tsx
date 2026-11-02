@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 
 export default function ExportsPage() {
+  const router = useRouter();
   const [downloading, setDownloading] = useState<string | null>(null);
   const [shop, setShop] = useState(DEMO_SHOP);
   const [invoices, setInvoices] = useState(DEMO_INVOICES);
@@ -50,13 +52,13 @@ export default function ExportsPage() {
 
   const handleDownloadGSTR1JSON = () => {
     setDownloading('gstr1_json');
-    window.location.href = '/api/exports?type=gstr1_json&year=2026&month=10';
+    router.push('/api/exports?type=gstr1_json&year=2026&month=10');
     setTimeout(() => setDownloading(null), 1000);
   };
 
   const handleDownloadGSTR3BCSV = () => {
     setDownloading('gstr3b_csv');
-    window.location.href = '/api/exports?type=gstr3b_csv&year=2026&month=10';
+    router.push('/api/exports?type=gstr3b_csv&year=2026&month=10');
     setTimeout(() => setDownloading(null), 1000);
   };
 

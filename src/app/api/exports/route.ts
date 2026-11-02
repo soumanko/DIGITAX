@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedContext, getShopInvoicesServer, getShopTransactionsServer } from '@/lib/supabase/server-db';
+import type { DbShop } from '@/types/database';
+import type { Invoice } from '@/types';
 import { generateGSTPeriodSummary } from '@/lib/gst/calculator';
 import { DEMO_SHOP, DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
 
@@ -13,7 +15,6 @@ function sanitizeCSVField(val: unknown): string {
   return `"${str.replace(/"/g, '""')}"`;
 }
 
-export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,8 +28,9 @@ export async function GET(request: NextRequest) {
 
     const ctx = await getAuthenticatedContext();
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let invoices: any[];
-    let shop: any;
+    let shop: DbShop | typeof DEMO_SHOP | null;
 
     if (!ctx.userId) {
       if (isDemoCookie && isDev) {
@@ -43,6 +45,10 @@ export async function GET(request: NextRequest) {
       }
       invoices = await getShopInvoicesServer(ctx.shop.id);
       shop = ctx.shop;
+    }
+
+    if (!shop) {
+      return NextResponse.json({ error: 'No active shop found' }, { status: 404 });
     }
 
     const summary = generateGSTPeriodSummary(shop.id, year, month, invoices);
@@ -61,7 +67,7 @@ export async function GET(request: NextRequest) {
               val: parseFloat(inv.total_amount),
               pos: inv.place_of_supply || shop.state_code,
               inv_typ: 'R',
-              itms: (inv.lines || inv.invoice_items || []).map((l: any) => ({
+              itms: (inv.lines || inv.invoice_items || []).map((l: { line_number?: number; taxable_value?: string; gst_rate?: string; igst_amount?: string; cgst_amount?: string; sgst_amount?: string }) => ({
                 num: l.line_number || 1,
                 itm_det: {
                   txval: parseFloat(l.taxable_value || inv.taxable_value),
@@ -83,10 +89,11 @@ export async function GET(request: NextRequest) {
         }],
       };
 
+      const safeGstin = (shop.gstin || 'SHOP').replace(/[^a-zA-Z0-9]/g, '_');
       return new NextResponse(JSON.stringify(gstr1Data, null, 2), {
         headers: {
           'Content-Type': 'application/json',
-          'Content-Disposition': `attachment; filename="GSTR1_${shop.gstin || 'SHOP'}_${month}_${year}.json"`,
+          'Content-Disposition': `attachment; filename="GSTR1_${safeGstin}_${month}_${year}.json"`,
         },
       });
     }
@@ -104,14 +111,15 @@ export async function GET(request: NextRequest) {
       .map(row => row.map(sanitizeCSVField).join(','))
       .join('\r\n');
 
+    const safeGstin = (shop.gstin || 'SHOP').replace(/[^a-zA-Z0-9]/g, '_');
     return new NextResponse(csvContent, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="GSTR3B_Summary_${shop.gstin || 'SHOP'}_${month}_${year}.csv"`,
+        'Content-Disposition': `attachment; filename="GSTR3B_Summary_${safeGstin}_${month}_${year}.csv"`,
       },
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error generating report export:', err);
-    return NextResponse.json({ error: err?.message || 'Export failed' }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Export failed' }, { status: 500 });
   }
 }

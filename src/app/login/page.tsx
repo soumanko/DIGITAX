@@ -42,16 +42,24 @@ function LoginForm() {
       }
 
       router.push(redirectPath);
-    } catch (err: any) {
-      setError(err?.message || 'Authentication service is unavailable. Please check your connection and credentials.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Authentication service is unavailable. Please check your connection and credentials.');
       setLoading(false);
     }
   };
 
-  const handleDemoSignIn = () => {
+  const handleDemoSignIn = async () => {
     // Explicit demo sandbox session (isolated testing mode)
-    document.cookie = 'digitax_demo_session=true; path=/; max-age=86400; SameSite=Lax';
-    router.push('/dashboard');
+    // Cookie is set server-side with HttpOnly flag via API route
+    const res = await fetch('/api/auth/demo-session', {
+      method: 'POST',
+    });
+    if (res.ok) {
+      router.push('/dashboard');
+    } else {
+      setError('Demo session is not available in this environment.');
+      setLoading(false);
+    }
   };
 
   return (

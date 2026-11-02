@@ -53,7 +53,7 @@ export async function createShop(shop: {
       pincode: shop.pincode || null,
       taxpayer_scheme: shop.taxpayer_scheme || 'regular',
       onboarding_completed: true,
-    } as any)
+    })
     .select()
     .single();
 
@@ -110,7 +110,7 @@ export async function createInvoiceWithLines(
       ...invoice,
       shop_id: shopId,
       review_state: invoice.review_state || 'pending_review',
-    } as any)
+    })
     .select()
     .single();
 
@@ -133,7 +133,7 @@ export async function createInvoiceWithLines(
       total_amount: item.total_amount || 0,
     }));
 
-    await supabase.from('invoice_items').insert(linesToInsert as any);
+    await supabase.from('invoice_items').insert(linesToInsert);
   }
 
   await logAuditEvent({
@@ -154,7 +154,7 @@ export async function updateInvoiceReviewState(
   const supabase = createClient();
   const { error } = await supabase
     .from('invoices')
-    .update({ review_state: reviewState, status: reviewState } as any)
+    .update({ review_state: reviewState, status: reviewState })
     .eq('id', invoiceId);
 
   if (error) {
@@ -198,7 +198,7 @@ export async function createTransaction(
       ...txn,
       shop_id: shopId,
       reconciliation_status: txn.reconciliation_status || 'unmatched',
-    } as any)
+    })
     .select()
     .single();
 
@@ -236,7 +236,7 @@ export async function createReconciliationMatch(
       match_status: 'confirmed',
       match_method: matchMethod,
       manual_review_status: 'reviewed',
-    } as any)
+    })
     .select()
     .single();
 
@@ -248,7 +248,7 @@ export async function createReconciliationMatch(
   // Update status on transaction
   await supabase
     .from('transactions')
-    .update({ reconciliation_status: 'matched' } as any)
+    .update({ reconciliation_status: 'matched' })
     .eq('id', transactionId);
 
   await logAuditEvent({
@@ -274,7 +274,7 @@ export async function saveGstSummary(
       shop_id: shopId,
       calculation_version: '1.0.0',
       status: summary.status || 'draft',
-    } as any)
+    })
     .select()
     .single();
 
@@ -315,7 +315,7 @@ export async function logAuditEvent(event: {
       entity_id: event.entity_id,
       metadata: event.metadata || null,
       reason: event.reason || null,
-    } as any);
+    });
   } catch (err) {
     console.warn('Audit logging bypassed:', err);
   }

@@ -57,7 +57,10 @@ export default function ReconciliationPage() {
   };
 
   React.useEffect(() => {
-    fetchReconData();
+    const loadData = async () => {
+      await fetchReconData();
+    };
+    loadData();
   }, []);
 
   // Find automated match suggestions using our reconciliation engine
@@ -86,9 +89,12 @@ export default function ReconciliationPage() {
 
       if (!res.ok) {
         const errData = await res.json();
-        console.warn('Remote reconciliation match notice (using local state fallback):', errData);
+        setApiError(errData.error || 'Failed to confirm reconciliation match');
+        setIsSubmittingMatch(null);
+        return;
       }
 
+      // Only update local state after server confirms persistence
       setConfirmedMatches([...confirmedMatches, matchKey]);
 
       // Update invoice payment status
@@ -118,8 +124,8 @@ export default function ReconciliationPage() {
             : txn
         )
       );
-    } catch (err: any) {
-      setApiError(err?.message || 'Failed to approve match');
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : 'Failed to approve match');
     } finally {
       setIsSubmittingMatch(null);
     }

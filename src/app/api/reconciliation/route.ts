@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ZodError } from 'zod';
 import {
   getAuthenticatedContext,
   getShopInvoicesServer,
@@ -7,7 +8,9 @@ import {
 } from '@/lib/supabase/server-db';
 import { findMatchSuggestions } from '@/lib/reconciliation/engine';
 import { confirmMatchSchema } from '@/lib/validation/schemas';
+import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 import { DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
+import { Invoice, Transaction } from '@/types';
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,11 +36,11 @@ export async function GET(request: NextRequest) {
       getShopTransactionsServer(ctx.shop.id),
     ]);
 
-    const suggestions = findMatchSuggestions(invoices as any, transactions as any);
+    const suggestions = findMatchSuggestions(invoices as unknown as Invoice[], transactions as unknown as Transaction[]);
     return NextResponse.json({ suggestions, isDemo: false });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error fetching reconciliation suggestions:', err);
-    return NextResponse.json({ error: err?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -46,6 +49,13 @@ export async function POST(request: NextRequest) {
     const ctx = await getAuthenticatedContext();
     if (!ctx.userId || !ctx.shop) {
       return NextResponse.json({ error: 'Authentication and active shop required' }, { status: 401 });
+    }
+
+    // Rate limit reconciliation confirmation: 30 per minute per shop (moderate)
+    const rateLimit = rateLimiters.moderate(`reconciliation:${ctx.shop.id}`);
+    const limitResponse = rateLimitResponse(rateLimit);
+    if (limitResponse.blocked) {
+      return limitResponse.response as Response;
     }
 
     const body = await request.json();
@@ -60,11 +70,11 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json({ match, success: true }, { status: 201 });
-  } catch (err: any) {
-    if (err?.name === 'ZodError') {
-      return NextResponse.json({ error: 'Validation failed', details: err.errors }, { status: 400 });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'ZodError') {
+      return NextResponse.json({ error: 'Validation failed', details: (err as ZodError).issues }, { status: 400 });
     }
     console.error('Error confirming match:', err);
-    return NextResponse.json({ error: err?.message || 'Failed to confirm reconciliation' }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to confirm reconciliation' }, { status: 500 });
   }
 }

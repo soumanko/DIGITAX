@@ -51,7 +51,10 @@ export default function TransactionsPage() {
   };
 
   React.useEffect(() => {
-    fetchTransactions();
+    const loadData = async () => {
+      await fetchTransactions();
+    };
+    loadData();
   }, []);
 
   const filteredTxns = transactions.filter((t) => {
@@ -114,42 +117,11 @@ export default function TransactionsPage() {
         setStatusMessage(`Successfully imported ${parsedPreview.length} statement transactions.`);
         setTimeout(() => setStatusMessage(null), 5000);
       } else {
-        // Fallback for local demo preview
-        const newTxns: Transaction[] = parsedPreview.map((p, idx) => ({
-          id: `txn-imp-${Date.now()}-${idx}`,
-          shop_id: 'shop-demo-001',
-          import_batch_id: null,
-          external_txn_id: null,
-          source: p.source,
-          source_account: 'Bank Statement Import',
-          bank_account_name: 'Primary Bank A/c',
-          transaction_date: p.transaction_date,
-          value_date: p.transaction_date,
-          description: p.description,
-          reference_number: p.reference_number || null,
-          upi_id: null,
-          direction: p.direction,
-          transaction_type: p.direction,
-          amount: p.amount,
-          category: p.category as any,
-          sub_category: undefined,
-          review_state: 'confirmed' as const,
-          reconciliation_status: 'unmatched' as const,
-          matched_amount: '0.00',
-          unmatched_amount: p.amount,
-          original_row_data: null,
-          notes: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }));
-        setTransactions([...newTxns, ...transactions]);
-        setShowImportModal(false);
-        setParsedPreview([]);
-        setStatusMessage(`Imported ${parsedPreview.length} transactions into current session.`);
-        setTimeout(() => setStatusMessage(null), 5000);
+        const errorData = await res.json();
+        setImportErrors([errorData.error || 'Failed to import transactions']);
       }
-    } catch (err: any) {
-      setImportErrors([err?.message || 'Failed to import transactions']);
+    } catch (err) {
+      setImportErrors([err instanceof Error ? err.message : 'Failed to import transactions']);
     } finally {
       setIsSubmitting(false);
     }

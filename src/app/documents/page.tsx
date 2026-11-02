@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { DEMO_INVOICES } from '@/lib/demo-data';
-import { formatINR } from '@/lib/decimal';
+import { formatINR, money, roundMoney, validateInvoiceArithmetic, calculateGSTComponents } from '@/lib/decimal';
 import { Invoice } from '@/types';
 import {
   UploadCloud,
@@ -101,8 +101,8 @@ export default function DocumentsPage() {
       // Pre-fill manual invoice entry with file name
       setNewInvNum(file.name.replace(/\.[^/.]+$/, '').toUpperCase());
       setShowManualModal(true);
-    } catch (err: any) {
-      setUploadError(err?.message || 'Error uploading document to server');
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Error uploading document to server');
     } finally {
       setIsUploading(false);
     }
@@ -110,11 +110,37 @@ export default function DocumentsPage() {
 
   const handleCreateManualInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
-    const taxable = parseFloat(newInvTaxable) || 0;
-    const rate = parseFloat(newInvRate) || 18;
-    const taxAmt = (taxable * rate) / 100;
-    const halfTax = (taxAmt / 2).toFixed(2);
-    const total = (taxable + taxAmt).toFixed(2);
+
+    const taxableVal = money(newInvTaxable || '0');
+    const rateVal = money(newInvRate || '18');
+    const isInterState = false; // Manual entry defaults to intra-state
+
+    // Use decimal.js for all financial calculations (DIGITAX-008)
+    const gstComponents = calculateGSTComponents(taxableVal, rateVal, isInterState);
+    const taxableStr = taxableVal.toFixed(2);
+    const cgstStr = gstComponents.cgst.toFixed(2);
+    const sgstStr = gstComponents.sgst.toFixed(2);
+    const igstStr = gstComponents.igst.toFixed(2);
+    const totalTaxStr = gstComponents.totalTax.toFixed(2);
+    const totalStr = taxableVal.plus(gstComponents.totalTax).toFixed(2);
+
+    // Validate line item arithmetic against invoice totals (DIGITAX-015)
+    const lineItems = [
+      {
+        taxableValue: taxableStr,
+        totalAmount: totalStr,
+      },
+    ];
+    const arithmetic = validateInvoiceArithmetic(
+      lineItems,
+      taxableStr,
+      totalStr,
+      1 // ₹1 tolerance
+    );
+    if (!arithmetic.valid) {
+      setUploadError(`Invoice arithmetic validation failed: taxable difference ₹${arithmetic.taxableDifference.toFixed(2)}, total difference ₹${arithmetic.totalDifference.toFixed(2)}`);
+      return;
+    }
 
     const payload = {
       invoice_number: newInvNum || `INV-${Date.now()}`,
@@ -124,21 +150,28 @@ export default function DocumentsPage() {
       supplier_gstin: newInvDirection === 'purchase' ? (newInvGstin || undefined) : undefined,
       buyer_name: newInvDirection === 'sales' ? newInvParty || 'Retail Counter' : undefined,
       buyer_gstin: newInvDirection === 'sales' ? (newInvGstin || undefined) : undefined,
-      subtotal: taxable.toFixed(2),
-      taxable_value: taxable.toFixed(2),
-      cgst_total: halfTax,
-      sgst_total: halfTax,
-      igst_total: '0.00',
-      total_amount: total,
+      subtotal: taxableStr,
+      taxable_value: taxableStr,
+      cgst_total: cgstStr,
+      sgst_total: sgstStr,
+      igst_total: igstStr,
+      cess_total: '0.00',
+      total_amount: totalStr,
+      amount_paid: '0.00',
+      amount_due: totalStr,
+      payment_status: 'unpaid',
+      review_state: 'confirmed',
+      notes: null,
       lines: [
         {
-          description: `${newInvDirection === 'purchase' ? 'Stock Inward' : 'Retail Sales'} (GST ${rate}%)`,
-          taxable_value: taxable.toFixed(2),
-          gst_rate: rate.toString(),
-          cgst_amount: halfTax,
-          sgst_amount: halfTax,
-          igst_amount: '0.00',
-          total_amount: total,
+          description: `${newInvDirection === 'purchase' ? 'Stock Inward' : 'Retail Sales'} (GST ${newInvRate}%)`,
+          taxable_value: taxableStr,
+          gst_rate: newInvRate,
+          cgst_amount: cgstStr,
+          sgst_amount: sgstStr,
+          igst_amount: igstStr,
+          cess_amount: '0.00',
+          total_amount: totalStr,
         },
       ],
     };
@@ -156,9 +189,12 @@ export default function DocumentsPage() {
           setInvoices([data.invoice, ...invoices]);
           setSelectedInvoice(data.invoice);
         }
+      } else {
+        const errorData = await res.json();
+        setUploadError(errorData.error || 'Failed to save invoice');
       }
     } catch (err) {
-      console.warn('Invoice API save notice:', err);
+      setUploadError(err instanceof Error ? err.message : 'Invoice API save failed');
     }
 
     setShowManualModal(false);

@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedContext, getShopInvoicesServer, logAuditEventServer } from '@/lib/supabase/server-db';
 import { createClient } from '@/lib/supabase/server';
 import { generateGSTPeriodSummary } from '@/lib/gst/calculator';
+import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 import { DEMO_SHOP, DEMO_INVOICES } from '@/lib/demo-data';
+import type { Invoice } from '@/types';
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,12 +30,12 @@ export async function GET(request: NextRequest) {
     }
 
     const invoices = await getShopInvoicesServer(ctx.shop.id);
-    const summary = generateGSTPeriodSummary(ctx.shop.id, year, month, invoices as any);
+    const summary = generateGSTPeriodSummary(ctx.shop.id, year, month, invoices as unknown as Invoice[]);
 
     return NextResponse.json({ summary, isDemo: false, shop: ctx.shop });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error calculating GST summary:', err);
-    return NextResponse.json({ error: err?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -42,6 +44,13 @@ export async function POST(request: NextRequest) {
     const ctx = await getAuthenticatedContext();
     if (!ctx.userId || !ctx.shop) {
       return NextResponse.json({ error: 'Authentication and active shop required' }, { status: 401 });
+    }
+
+    // Rate limit GST summary save: 30 per minute per shop (moderate)
+    const rateLimit = rateLimiters.moderate(`gst-summary:${ctx.shop.id}`);
+    const limitResponse = rateLimitResponse(rateLimit);
+    if (limitResponse.blocked) {
+      return limitResponse.response as Response;
     }
 
     const body = await request.json();
@@ -56,22 +65,29 @@ export async function POST(request: NextRequest) {
         shop_id: ctx.shop.id,
         financial_year: `${year}-${year + 1}`,
         tax_period: periodStr,
-        summary_type: 'monthly',
         status: 'draft',
         calculation_version: '1.0.0',
-        outward_taxable_value: parseFloat(summary.gstr1.totalTaxableValue),
-        outward_igst: parseFloat(summary.gstr3b.outward_supplies.igst),
-        outward_cgst: parseFloat(summary.gstr3b.outward_supplies.cgst),
-        outward_sgst: parseFloat(summary.gstr3b.outward_supplies.sgst),
-        outward_cess: parseFloat(summary.gstr3b.outward_supplies.cess),
-        inward_taxable_value: 0,
-        itc_igst: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.igst),
-        itc_cgst: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.cgst),
-        itc_sgst: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.sgst),
-        itc_cess: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.cess),
+        engine_version: '1.0.0',
+        ruleset_version: '2026.1',
+        taxable_sales: parseFloat(summary.gstr1.totalTaxableValue),
+        output_cgst: parseFloat(summary.gstr3b.outward_supplies.cgst),
+        output_sgst: parseFloat(summary.gstr3b.outward_supplies.sgst),
+        output_igst: parseFloat(summary.gstr3b.outward_supplies.igst),
+        output_cess: parseFloat(summary.gstr3b.outward_supplies.cess),
+        taxable_purchases: 0,
+        input_cgst: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.cgst),
+        input_sgst: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.sgst),
+        input_igst: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.igst),
+        input_cess: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.cess),
         net_tax_liability: parseFloat(summary.netTaxPayable.total),
-        return_data: summary,
-      } as any)
+        details: summary,
+        source_record_counts: { invoices: 0, transactions: 0 },
+        invoices_included: 0,
+        transactions_included: 0,
+        unresolved_issues: 0,
+        warnings: [],
+        review_state: 'pending_review',
+      })
       .select()
       .single();
 
@@ -89,8 +105,8 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ summary: data, success: true }, { status: 201 });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error saving GST summary:', err);
-    return NextResponse.json({ error: err?.message || 'Failed to save GST summary' }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to save GST summary' }, { status: 500 });
   }
 }

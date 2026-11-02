@@ -141,4 +141,124 @@ describe('DIGITAX Database & Multi-Tenant Security Verification', () => {
     const isImmutable = true;
     assert.strictEqual(isImmutable, true, 'Audit events are append-only and strictly immutable');
   });
+
+  it('11. Cross-shop invoice creation via RPC is rejected', async (t) => {
+    if (!(await checkEndpointReachable())) {
+      t.skip('Remote Supabase instance unreachable (offline/local environment). Live RPC security test skipped.');
+      return;
+    }
+    const shopA = '11111111-1111-1111-1111-111111111111';
+    const shopB = '22222222-2222-2222-2222-222222222222';
+
+    // Attempt to create an invoice for shopB using shopA's context
+    // The RPC function (SECURITY DEFINER) should reject this because
+    // the authenticated user is not a member of shopB
+    const { error } = await anonClient.rpc('create_invoice_atomic', {
+      p_shop_id: shopB,
+      p_user_id: '00000000-0000-0000-0000-000000000000',
+      p_invoice_number: 'HACK-CROSS-001',
+      p_invoice_date: '2026-10-15',
+      p_direction: 'sales',
+      p_invoice_type: 'sales_tax_invoice',
+      p_supplier_name: 'Hack Vendor',
+      p_supplier_gstin: null,
+      p_customer_name: 'Hack Customer',
+      p_customer_gstin: null,
+      p_place_of_supply: null,
+      p_subtotal: '1000.00',
+      p_discount_amount: '0.00',
+      p_taxable_value: '1000.00',
+      p_cgst_amount: '90.00',
+      p_sgst_amount: '90.00',
+      p_igst_amount: '0.00',
+      p_cess_amount: '0.00',
+      p_total_tax: '180.00',
+      p_total_amount: '1180.00',
+      p_amount_paid: '0.00',
+      p_amount_due: '1180.00',
+      p_payment_status: 'unpaid',
+      p_review_state: 'pending_review',
+      p_notes: null,
+      p_items: [],
+    });
+    assert.notStrictEqual(error, null, 'Cross-shop invoice creation via RPC must be rejected');
+  });
+
+  it('12. User impersonation via RPC is rejected (p_user_id != auth.uid())', async (t) => {
+    if (!(await checkEndpointReachable())) {
+      t.skip('Remote Supabase instance unreachable (offline/local environment). Live RPC security test skipped.');
+      return;
+    }
+    const shopA = '11111111-1111-1111-1111-111111111111';
+
+    // Attempt to create an invoice with a different user_id than the authenticated user
+    const { error } = await anonClient.rpc('create_invoice_atomic', {
+      p_shop_id: shopA,
+      p_user_id: '00000000-0000-0000-0000-000000000000',
+      p_invoice_number: 'HACK-IMPERSONATE-001',
+      p_invoice_date: '2026-10-15',
+      p_direction: 'sales',
+      p_invoice_type: 'sales_tax_invoice',
+      p_supplier_name: 'Hack Vendor',
+      p_supplier_gstin: null,
+      p_customer_name: 'Hack Customer',
+      p_customer_gstin: null,
+      p_place_of_supply: null,
+      p_subtotal: '1000.00',
+      p_discount_amount: '0.00',
+      p_taxable_value: '1000.00',
+      p_cgst_amount: '90.00',
+      p_sgst_amount: '90.00',
+      p_igst_amount: '0.00',
+      p_cess_amount: '0.00',
+      p_total_tax: '180.00',
+      p_total_amount: '1180.00',
+      p_amount_paid: '0.00',
+      p_amount_due: '1180.00',
+      p_payment_status: 'unpaid',
+      p_review_state: 'pending_review',
+      p_notes: null,
+      p_items: [],
+    });
+    assert.notStrictEqual(error, null, 'User impersonation via RPC must be rejected');
+  });
+
+  it('13. Invalid items parameter via RPC is rejected', async (t) => {
+    if (!(await checkEndpointReachable())) {
+      t.skip('Remote Supabase instance unreachable (offline/local environment). Live RPC security test skipped.');
+      return;
+    }
+    const shopA = '11111111-1111-1111-1111-111111111111';
+
+    // Attempt to create an invoice with non-array items parameter
+    const { error } = await anonClient.rpc('create_invoice_atomic', {
+      p_shop_id: shopA,
+      p_user_id: '00000000-0000-0000-0000-000000000000',
+      p_invoice_number: 'HACK-ITEMS-001',
+      p_invoice_date: '2026-10-15',
+      p_direction: 'sales',
+      p_invoice_type: 'sales_tax_invoice',
+      p_supplier_name: 'Hack Vendor',
+      p_supplier_gstin: null,
+      p_customer_name: 'Hack Customer',
+      p_customer_gstin: null,
+      p_place_of_supply: null,
+      p_subtotal: '1000.00',
+      p_discount_amount: '0.00',
+      p_taxable_value: '1000.00',
+      p_cgst_amount: '90.00',
+      p_sgst_amount: '90.00',
+      p_igst_amount: '0.00',
+      p_cess_amount: '0.00',
+      p_total_tax: '180.00',
+      p_total_amount: '1180.00',
+      p_amount_paid: '0.00',
+      p_amount_due: '1180.00',
+      p_payment_status: 'unpaid',
+      p_review_state: 'pending_review',
+      p_notes: null,
+      p_items: 'not-an-array',
+    });
+    assert.notStrictEqual(error, null, 'Non-array items parameter must be rejected');
+  });
 });

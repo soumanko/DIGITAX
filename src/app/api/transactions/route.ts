@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedContext, getShopTransactionsServer, importTransactionsBatchServer } from '@/lib/supabase/server-db';
 import { DEMO_TRANSACTIONS } from '@/lib/demo-data';
+import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,9 +23,9 @@ export async function GET(request: NextRequest) {
 
     const transactions = await getShopTransactionsServer(ctx.shop.id);
     return NextResponse.json({ transactions, isDemo: false });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error fetching transactions:', err);
-    return NextResponse.json({ error: err?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -33,6 +34,13 @@ export async function POST(request: NextRequest) {
     const ctx = await getAuthenticatedContext();
     if (!ctx.userId || !ctx.shop) {
       return NextResponse.json({ error: 'Authentication and active shop required' }, { status: 401 });
+    }
+
+    // Rate limit transaction import: 30 per minute per shop (moderate)
+    const rateLimit = rateLimiters.moderate(`transaction-import:${ctx.shop.id}`);
+    const limitResponse = rateLimitResponse(rateLimit);
+    if (limitResponse.blocked) {
+      return limitResponse.response as Response;
     }
 
     const body = await request.json();
@@ -53,8 +61,8 @@ export async function POST(request: NextRequest) {
 
     const imported = await importTransactionsBatchServer(ctx.shop.id, ctx.userId, transactions);
     return NextResponse.json({ transactions: imported, count: imported.length, success: true }, { status: 201 });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error importing transactions:', err);
-    return NextResponse.json({ error: err?.message || 'Failed to import transactions' }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to import transactions' }, { status: 500 });
   }
 }

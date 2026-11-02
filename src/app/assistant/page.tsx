@@ -23,6 +23,36 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+// Browser SpeechRecognition API types (not in standard TypeScript DOM lib)
+interface SpeechRecognition {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  [index: number]: { transcript: string; confidence: number };
+}
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResult[];
+  error: string;
+}
+declare const SpeechRecognition: new () => SpeechRecognition;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: typeof SpeechRecognition;
+    webkitSpeechRecognition?: typeof SpeechRecognition;
+  }
+}
+
 export default function AssistantPage() {
   const [shopName, setShopName] = useState('Your Business');
   const [messages, setMessages] = useState<GnaniMessage[]>([
@@ -39,7 +69,7 @@ export default function AssistantPage() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
     async function loadShop() {
@@ -90,7 +120,7 @@ export default function AssistantPage() {
 
       const result = await res.json();
       setMessages([...newMessages, { role: 'assistant', content: result.text }]);
-    } catch (err: any) {
+    } catch (err) {
       setMessages([
         ...newMessages,
         {
@@ -116,8 +146,11 @@ export default function AssistantPage() {
 
     if (typeof window === 'undefined') return;
 
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognitionCtor =
+      (window as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition })
+        .SpeechRecognition ||
+      (window as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition })
+        .webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       setVoiceError('Speech recognition is not supported in this browser. Please use Chrome, Edge, or type your query.');
@@ -125,7 +158,7 @@ export default function AssistantPage() {
     }
 
     try {
-      const recognition = new SpeechRecognition();
+      const recognition: SpeechRecognition = new SpeechRecognitionCtor!();
       recognitionRef.current = recognition;
 
       const langMap: Record<string, string> = {
@@ -142,14 +175,14 @@ export default function AssistantPage() {
         setIsRecording(true);
       };
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
         const transcript = Array.from(event.results)
-          .map((result: any) => result[0].transcript)
+          .map((result: SpeechRecognitionResult) => result[0].transcript)
           .join('');
         setInput(transcript);
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event: SpeechRecognitionEvent) => {
         console.warn('Speech recognition error event:', event.error);
         if (event.error === 'not-allowed') {
           setVoiceError('Microphone permission was denied. Please allow microphone access in your browser settings.');
@@ -164,9 +197,9 @@ export default function AssistantPage() {
       };
 
       recognition.start();
-    } catch (err: any) {
+    } catch (err) {
       console.warn('Could not start speech recognition:', err);
-      setVoiceError(err?.message || 'Could not access microphone.');
+      setVoiceError(err instanceof Error ? err.message : 'Could not access microphone.');
       setIsRecording(false);
     }
   };
@@ -223,7 +256,7 @@ export default function AssistantPage() {
             <Globe2 className="h-4 w-4 text-text-tertiary" />
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value as any)}
+              onChange={(e) => setLanguage(e.target.value as 'en' | 'hi' | 'bn' | 'mr')}
               className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-primary focus:ring-2 focus:ring-primary-500"
             >
               <option value="hi">हिंदी (Hindi)</option>

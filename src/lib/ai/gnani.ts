@@ -1,6 +1,13 @@
 /**
- * GNANI EVON V3.3 AI Assistant & PRISMA/TIMBRE Voice Integration
- * With strict tool allowlist and safety boundaries
+ * DIGITAX — GNANI EVON V3.3 AI Assistant
+ *
+ * AI assistant for GST bookkeeping queries. Integrates with the GNANI EVON
+ * API when configured. When no API key is available, returns a truthful
+ * "service unavailable" response — never fabricates financial data.
+ *
+ * All financial calculations are delegated to deterministic backend
+ * functions (decimal.js, GST calculator). The AI never computes
+ * authoritative tax or invoice amounts.
  */
 
 export interface GnaniMessage {
@@ -25,15 +32,19 @@ You speak and understand English, हिंदी (Hindi), বাংলা (Beng
 CRITICAL COMPLIANCE AND SAFETY RULES:
 1. DIGITAX prepares bookkeeping records and return calculations for human practitioner review.
 2. YOU MUST NEVER claim you have directly filed a GST return to the government portal (GSTN). Always refer to preparing summaries for review or export.
-3. Keep financial calculations exact.
+3. Keep financial calculations exact. Never fabricate financial figures.
 4. When speaking in Indic languages, maintain respectful, natural business terminology (e.g. 'इनपुट टैक्स क्रेडिट', 'चलान', 'खरीद बिल').
-5. If asked to do something outside financial bookkeeping or GST guidance, politely decline.`;
+5. If asked to do something outside financial bookkeeping or GST guidance, politely decline.
+6. If you do not have access to the user's actual business data, say so clearly. Do not invent figures.
+7. Financial calculations must be performed by the backend GST engine, not by the AI.`;
+
+export type GnaniSource = 'gnani_api' | 'unavailable';
 
 export async function askGnaniEvon(
   messages: GnaniMessage[],
   context: AssistantContext,
   language: string = 'en'
-): Promise<{ text: string; source: 'gnani_api' | 'intelligent_fallback'; language: string }> {
+): Promise<{ text: string; source: GnaniSource; language: string }> {
   const apiKey = process.env.GNANI_EVON_API_KEY;
   const apiUrl = process.env.GNANI_EVON_API_URL || 'https://api.gnani.ai/evon/v3.3';
 
@@ -64,36 +75,22 @@ export async function askGnaniEvon(
         }
       }
     } catch (err) {
-      console.warn('Gnani EVON API error, using intelligent fallback:', err);
+      console.warn('Gnani EVON API error:', err);
     }
   }
 
-  // Intelligent fallback for development, demo, and offline resilience
-  const lastUserMsg = messages[messages.length - 1]?.content.toLowerCase() || '';
-
-  let replyText = '';
-
-  if (lastUserMsg.includes('itc') || lastUserMsg.includes('credit') || lastUserMsg.includes('इनपुट')) {
-    if (language === 'hi' || lastUserMsg.includes('हिंदी')) {
-      replyText = `वर्तमान माह (${context.currentPeriod}) के लिए आपकी दुकान **${context.shopName}** के पास पात्र इनपुट टैक्स क्रेडिट (ITC) ₹18,306.00 है। Apex FMCG और HUL के सभी खरीद बिलों का GSTIN सक्रिय पाया गया है। कृपया CA समीक्षा से पहले एक बार इनवॉइस चेक कर लें।`;
-    } else if (language === 'mr') {
-      replyText = `चालू महिन्यासाठी (${context.currentPeriod}) आपल्या **${context.shopName}** दुकानाचे पात्र ITC ₹18,306.00 आहे. सर्व पुरवठादारांचे GSTIN वैध आहेत.`;
-    } else if (language === 'bn') {
-      replyText = `বর্তমান মাসে (${context.currentPeriod}) আপনার দোকান **${context.shopName}**-এর জন্য যোগ্য ইনপুট ট্যাক্স ক্রেডিট (ITC) ₹18,306.00।`;
-    } else {
-      replyText = `For the current period (${context.currentPeriod}), your eligible Input Tax Credit (ITC) on inward supplies is **₹18,306.00**. Both vendor invoices from Apex Wholesale and HUL have active GSTINs and match GSTR-2B guidelines.`;
-    }
-  } else if (lastUserMsg.includes('reconcil') || lastUserMsg.includes('bank') || lastUserMsg.includes('upi') || lastUserMsg.includes('मिलान')) {
-    replyText = `You currently have **${context.unreconciledCount} transactions** needing review. I found high-confidence matches for your HDFC UPI payments to Apex FMCG (₹53,100.00) and HUL Depot (₹45,076.00). Would you like to confirm them in the Reconciliation Center?`;
-  } else if (lastUserMsg.includes('gstr-1') || lastUserMsg.includes('gstr-3b') || lastUserMsg.includes('return') || lastUserMsg.includes('फाइल')) {
-    replyText = `Your October return calculations are ready for review: Total Outward Taxable Value is ₹87,000.00 with Net Tax Payable of ₹0.00 after offsetting available ITC. You can download the JSON export to share with your Chartered Accountant.`;
-  } else {
-    replyText = `Hello! I am your DIGITAX GST Copilot for **${context.shopName}**. I can help you reconcile bank UPI statements, verify HSN tax rates (0%, 5%, 12%, 18%, 28%), calculate eligible ITC, or check return readiness. How can I assist your business today?`;
-  }
+  // No OCR/AI provider configured — return truthful unavailability message
+  // Never fabricate financial data or provide hardcoded fallback responses
+  const unavailableMessages: Record<string, string> = {
+    en: `I am your DIGITAX GST Copilot for **${context.shopName}**. However, the AI assistant service is not currently configured. Please set the GNANI_EVON_API_KEY environment variable to enable AI-powered assistance. In the meantime, you can use the Dashboard, GST Workspace, and Reconciliation Center to manage your bookkeeping manually.`,
+    hi: `मैं आपका DIGITAX GST कॉपिलॉट हूं, **${context.shopName}** के लिए। हालांकि, AI सहायक सेवा वर्तमान में कॉन्फ़िगर नहीं की गई है। AI-संचालित सहायता सक्षम करने के लिए GNANI_EVON_API_KEY पर्यावरण चर सेट करें। तब तक, आप डैशबोर्ड, GST कार्यक्षेत्र, और मिलान केंद्र का उपयोग करके मैनुअल रूप से अपनी बहीखाता प्रबंधन कर सकते हैं।`,
+    bn: `আমি আপনার DIGITAX GST কোপাইলট, **${context.shopName}** এর জন্য। তবে, AI সহায়তা সেবা বর্তমানে কনফিগার করা হয়নি। AI-চালিত সহায়তা সক্রিয় করতে GNANI_EVON_API_KEY পরিবেশ चल extrem সেট করুন।ntil রিলিজ, আপনি ড্যাশবোর্ড, GST কর্মক্ষेत्र, এবং মিলান কেন্দ্র ব্যবহার করে ম্যানুয়ালি আপনার বहीखাত পরিচালনা করতে পারেন।`,
+    mr: `मी तुमचा DIGITAX GST कॉपिलॉट आहे, **${context.shopName}** साठी. तथापि, AI सहायक सेवा सध्याच्या सेट केलेली नाही. AI-संचालित सहायता सक्षम करण्यासाठी GNANI_EVON_API_KEY वातावरण चल सेट करा. त्यापर्यंत, तुम्ही डॅशबोर्ड, GST कार्यक्षेत्र, आणि मिलान केंद्र वापरून मॅन्युअली तुमचे बहीखाता व्यवस्थापित करू शकता.`,
+  };
 
   return {
-    text: replyText,
-    source: 'intelligent_fallback',
+    text: unavailableMessages[language] || unavailableMessages.en,
+    source: 'unavailable',
     language,
   };
 }

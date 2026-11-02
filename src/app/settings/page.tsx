@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { DEMO_SHOP } from '@/lib/demo-data';
 import { createClient } from '@/lib/supabase/client';
+import { gstinSchema } from '@/lib/validation/schemas';
 import {
   Settings,
   Store,
@@ -17,18 +19,21 @@ import {
   Key,
   LogOut,
   Save,
-  AlertTriangle
+  AlertTriangle,
+  AlertCircle
 } from 'lucide-react';
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [shopName, setShopName] = useState(DEMO_SHOP.name);
   const [gstin, setGstin] = useState(DEMO_SHOP.gstin || '');
   const [businessType, setBusinessType] = useState(DEMO_SHOP.business_type || '');
   const [city, setCity] = useState(DEMO_SHOP.city || '');
-  const [scheme, setScheme] = useState(DEMO_SHOP.taxpayer_scheme);
-  const [language, setLanguage] = useState(DEMO_SHOP.preferred_language);
+  const [scheme, setScheme] = useState<'regular' | 'composition_goods' | 'qrmp'>('regular');
+  const [language, setLanguage] = useState<'en' | 'hi' | 'bn' | 'mr'>('en');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [gstinError, setGstinError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadShop() {
@@ -68,13 +73,32 @@ export default function SettingsPage() {
     loadShop();
   }, []);
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+    setSaveError(null);
+    setSavedSuccess(false);
+
+    // Validate GSTIN if provided (DIGITAX-013)
+    if (gstin && gstin.trim() !== '') {
+      try {
+        gstinSchema.parse(gstin);
+        setGstinError(null);
+      } catch {
+        setGstinError('Invalid GSTIN format. Expected 15-character alphanumeric (e.g., 27AABCS1429B1ZB).');
+        setIsSaving(false);
+        return;
+      }
+    } else {
+      setGstinError(null);
+    }
+
     const updated = {
       ...DEMO_SHOP,
       name: shopName,
-      gstin,
+      gstin: gstin || null,
       business_type: businessType,
       city,
       taxpayer_scheme: scheme,
@@ -82,21 +106,32 @@ export default function SettingsPage() {
     };
 
     try {
-      await fetch('/api/shops', {
+      const res = await fetch('/api/shops', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
-    } catch (err) {
-      console.warn('API shop save error:', err);
-    }
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('digitax_active_shop', JSON.stringify(updated));
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Save failed' }));
+        setSaveError(errorData.error || 'Failed to save shop settings');
+        setIsSaving(false);
+        return;
+      }
+
+      const data = await res.json();
+
+      if (typeof window !== 'undefined' && data.shop) {
+        localStorage.setItem('digitax_active_shop', JSON.stringify(data.shop));
+      }
+
+      setIsSaving(false);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Network error saving shop settings');
+      setIsSaving(false);
     }
-    setIsSaving(false);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
   };
 
   const handleSignOut = async () => {
@@ -107,7 +142,7 @@ export default function SettingsPage() {
       console.warn('Sign out notice:', err);
     }
     document.cookie = 'digitax_demo_session=; path=/; max-age=0;';
-    window.location.href = '/login';
+    router.push('/login');
   };
 
   return (
@@ -142,6 +177,12 @@ export default function SettingsPage() {
             <strong>Settings Saved:</strong> Shop profile and GST configurations updated successfully.
           </div>
         )}
+        {saveError && (
+          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-300 flex items-center gap-2 animate-fade-in">
+            <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+            <strong>Save Failed:</strong> {saveError}
+          </div>
+        )}
 
         <form onSubmit={handleSave} className="space-y-6">
           {/* Business & GST Profile */}
@@ -171,10 +212,19 @@ export default function SettingsPage() {
                   </label>
                   <Input
                     value={gstin}
-                    onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                    onChange={(e) => {
+                      setGstin(e.target.value.toUpperCase());
+                      setGstinError(null);
+                    }}
                     className="font-mono uppercase"
                     maxLength={15}
+                    error={gstinError || undefined}
                   />
+                  {gstinError && (
+                    <p id="gstin-error" className="text-xs text-error-600" role="alert">
+                      {gstinError}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -206,7 +256,7 @@ export default function SettingsPage() {
                 </label>
                 <select
                   value={scheme}
-                  onChange={(e) => setScheme(e.target.value as any)}
+                  onChange={(e) => setScheme(e.target.value as 'regular' | 'composition_goods' | 'qrmp')}
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-primary focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="regular">Regular Scheme (Monthly GSTR-1 & 3B, Full ITC)</option>
@@ -232,7 +282,7 @@ export default function SettingsPage() {
                 </label>
                 <select
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value as any)}
+                  onChange={(e) => setLanguage(e.target.value as 'en' | 'hi' | 'bn' | 'mr')}
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-primary focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="hi">हिंदी (Hindi)</option>

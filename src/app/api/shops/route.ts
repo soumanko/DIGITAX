@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ZodError } from 'zod';
 import { getAuthenticatedContext, createShopWithMembership } from '@/lib/supabase/server-db';
 import { createShopSchema } from '@/lib/validation/schemas';
+import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 import { DEMO_SHOP } from '@/lib/demo-data';
 
 export async function GET(request: NextRequest) {
@@ -23,9 +25,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ shop: ctx.shop, isDemo: false });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error fetching shop:', err);
-    return NextResponse.json({ error: err?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -34,6 +36,13 @@ export async function POST(request: NextRequest) {
     const ctx = await getAuthenticatedContext();
     if (!ctx.userId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Rate limit shop creation: 5 per minute per user (strict)
+    const rateLimit = rateLimiters.strict(`shop-create:${ctx.userId}`);
+    const limitResponse = rateLimitResponse(rateLimit);
+    if (limitResponse.blocked) {
+      return limitResponse.response as Response;
     }
 
     const body = await request.json();
@@ -47,16 +56,16 @@ export async function POST(request: NextRequest) {
       state: validated.state,
       city: validated.city,
       pincode: validated.pincode,
-      taxpayer_scheme: validated.taxpayer_scheme as any,
+      taxpayer_scheme: validated.taxpayer_scheme,
       preferred_language: validated.preferred_language,
     });
 
     return NextResponse.json({ shop: newShop, success: true }, { status: 201 });
-  } catch (err: any) {
-    if (err?.name === 'ZodError') {
-      return NextResponse.json({ error: 'Validation failed', details: err.errors }, { status: 400 });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'ZodError') {
+      return NextResponse.json({ error: 'Validation failed', details: (err as ZodError).issues }, { status: 400 });
     }
     console.error('Error creating shop:', err);
-    return NextResponse.json({ error: err?.message || 'Failed to create business shop' }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to create business shop' }, { status: 500 });
   }
 }

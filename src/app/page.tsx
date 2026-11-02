@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { MarketingLayout } from '@/components/layout/marketing-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -26,10 +27,18 @@ import {
 } from 'lucide-react';
 
 export default function HomePage() {
-  const handleDemoAccess = () => {
-    // Set demo session cookie for direct test access
-    document.cookie = 'digitax_demo_session=true; path=/; max-age=86400; SameSite=Lax';
-    window.location.href = '/dashboard';
+  const router = useRouter();
+  const handleDemoAccess = async () => {
+    // Set demo session cookie server-side with HttpOnly flag
+    const res = await fetch('/api/auth/demo-session', {
+      method: 'POST',
+    });
+    if (res.ok) {
+      router.push('/dashboard');
+    } else {
+      // Demo not available in this environment
+      return;
+    }
   };
 
   return (

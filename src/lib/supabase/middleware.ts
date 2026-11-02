@@ -1,7 +1,9 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { requireSupabaseConfig } from './config-validation';
 
 export async function updateSession(request: NextRequest) {
+  requireSupabaseConfig();
   let supabaseResponse = NextResponse.next({
     request,
   });
@@ -40,13 +42,13 @@ export async function updateSession(request: NextRequest) {
       user = data.user;
     } else if (isDemoSession && isDevOrTest) {
       // Isolated mock user exclusively for local development preview
-      user = { id: 'demo-user-123', email: 'rajesh@shreekrishnatraders.in' } as any;
+      user = { id: 'demo-user-123', email: 'rajesh@shreekrishnatraders.in' } as { id: string; email: string };
     }
   } catch (err) {
     console.warn('Supabase auth session verification failed:', err);
     // Explicitly do not grant access on network or database error
     if (isDemoSession && isDevOrTest) {
-      user = { id: 'demo-user-123', email: 'rajesh@shreekrishnatraders.in' } as any;
+      user = { id: 'demo-user-123', email: 'rajesh@shreekrishnatraders.in' } as { id: string; email: string };
     }
   }
 

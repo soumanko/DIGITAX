@@ -102,7 +102,7 @@ export async function createShopWithMembership(userId: string, shopData: {
       taxpayer_scheme: shopData.taxpayer_scheme || 'regular',
       preferred_language: shopData.preferred_language || 'en',
       onboarding_completed: true,
-    } as any)
+    })
     .select()
     .single();
 
@@ -117,7 +117,7 @@ export async function createShopWithMembership(userId: string, shopData: {
       shop_id: shop.id,
       user_id: userId,
       role: 'owner',
-    } as any);
+    })
   } catch (err) {
     console.warn('Membership record insert notice:', err);
   }
@@ -138,8 +138,8 @@ export async function createShopWithMembership(userId: string, shopData: {
 /**
  * Retrieves invoices for an authorized shop.
  */
-export async function getShopInvoicesServer(shopId: string): Promise<any[]> {
-  const supabase = await createClient();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getShopInvoicesServer(shopId: string): Promise<any[]> {  const supabase = await createClient();
   const { data, error } = await supabase
     .from('invoices')
     .select('*, invoice_items(*)')
@@ -155,64 +155,68 @@ export async function getShopInvoicesServer(shopId: string): Promise<any[]> {
 }
 
 /**
- * Creates an invoice with line items atomically and logs the audit event.
+ * Creates an invoice with line items atomically using a PostgreSQL transaction
+ * via the `create_invoice_atomic` RPC function. If any line item fails, the
+ * entire operation rolls back, preventing orphaned invoice headers.
  */
 export async function createInvoiceServer(
   shopId: string,
   userId: string,
-  invoice: Record<string, any>,
-  items?: Array<Record<string, any>>
+  invoice: Record<string, unknown>,
+  items?: Array<Record<string, unknown>>
 ): Promise<DbInvoice> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from('invoices')
-    .insert({
-      ...invoice,
-      shop_id: shopId,
-      review_state: invoice.review_state || 'confirmed',
-      status: invoice.status || 'confirmed',
-    } as any)
-    .select()
-    .single();
+  const linesPayload = (items || []).map((item, index) => ({
+    line_number: index + 1,
+    description: item.description,
+    hsn_sac_code: item.hsn_sac_code || null,
+    quantity: item.quantity || 1,
+    unit_price: item.unit_price || 0,
+    taxable_value: item.taxable_value || 0,
+    gst_rate: item.gst_rate || 18,
+    cgst_amount: item.cgst_amount || 0,
+    sgst_amount: item.sgst_amount || 0,
+    igst_amount: item.igst_amount || 0,
+    cess_amount: item.cess_amount || 0,
+    total_amount: item.total_amount || 0,
+  }));
 
-  if (error || !data) {
-    console.error('Error creating invoice:', error);
-    throw new Error(error?.message || 'Failed to persist invoice');
-  }
-
-  if (items && items.length > 0) {
-    const lines = items.map((item, index) => ({
-      invoice_id: data.id,
-      line_number: index + 1,
-      description: item.description,
-      hsn_sac_code: item.hsn_sac_code || null,
-      quantity: item.quantity || 1,
-      unit_price: item.unit_price || 0,
-      taxable_value: item.taxable_value || 0,
-      gst_rate: item.gst_rate || 18,
-      cgst_amount: item.cgst_amount || 0,
-      sgst_amount: item.sgst_amount || 0,
-      igst_amount: item.igst_amount || 0,
-      total_amount: item.total_amount || 0,
-    }));
-
-    const { error: lineError } = await supabase.from('invoice_items').insert(lines as any);
-    if (lineError) {
-      console.warn('Error inserting invoice lines:', lineError);
-    }
-  }
-
-  await logAuditEventServer({
-    shopId,
-    actorId: userId,
-    action: 'invoice_created',
-    entityType: 'invoice',
-    entityId: data.id,
-    metadata: { invoice_number: data.invoice_number, total: data.total_amount },
+  const { data, error } = await supabase.rpc('create_invoice_atomic', {
+    p_shop_id: shopId,
+    p_user_id: userId,
+    p_invoice_number: invoice.invoice_number,
+    p_invoice_date: invoice.invoice_date,
+    p_direction: invoice.direction,
+    p_invoice_type: invoice.invoice_type,
+    p_supplier_name: invoice.supplier_name,
+    p_supplier_gstin: invoice.supplier_gstin,
+    p_customer_name: invoice.customer_name,
+    p_customer_gstin: invoice.customer_gstin,
+    p_place_of_supply: invoice.place_of_supply,
+    p_subtotal: invoice.subtotal,
+    p_discount_amount: invoice.discount_amount || '0',
+    p_taxable_value: invoice.taxable_value,
+    p_cgst_amount: invoice.cgst_amount,
+    p_sgst_amount: invoice.sgst_amount,
+    p_igst_amount: invoice.igst_amount,
+    p_cess_amount: invoice.cess_amount,
+    p_total_tax: invoice.total_tax,
+    p_total_amount: invoice.total_amount,
+    p_amount_paid: invoice.amount_paid || '0',
+    p_amount_due: invoice.amount_due,
+    p_payment_status: invoice.payment_status,
+    p_review_state: invoice.review_state || 'confirmed',
+    p_notes: invoice.notes || null,
+    p_items: linesPayload,
   });
 
-  return data as DbInvoice;
+  if (error || !data) {
+    console.error('Error creating invoice atomically:', error);
+    throw new Error(error?.message || 'Failed to persist invoice atomically');
+  }
+
+  return data as unknown as DbInvoice;
 }
 
 /**
@@ -240,7 +244,7 @@ export async function getShopTransactionsServer(shopId: string): Promise<DbTrans
 export async function importTransactionsBatchServer(
   shopId: string,
   userId: string,
-  transactions: Array<Record<string, any>>
+  transactions: Array<Record<string, unknown>>
 ): Promise<DbTransaction[]> {
   const supabase = await createClient();
 
@@ -266,7 +270,7 @@ export async function importTransactionsBatchServer(
 
   const { data, error } = await supabase
     .from('transactions')
-    .insert(formattedTxns as any)
+    .insert(formattedTxns)
     .select();
 
   if (error || !data) {
@@ -322,7 +326,7 @@ export async function confirmReconciliationMatchServer(
       match_status: 'confirmed',
       match_method: 'manual_confirmed',
       manual_review_status: 'reviewed',
-    } as any)
+    })
     .select()
     .single();
 
@@ -344,7 +348,7 @@ export async function confirmReconciliationMatchServer(
       matched_amount: newMatched.toFixed(2),
       unmatched_amount: newUnmatched.toFixed(2),
       reconciliation_status: newStatus,
-    } as any)
+    })
     .eq('id', transactionId);
 
   // Update invoice payment status
@@ -359,7 +363,7 @@ export async function confirmReconciliationMatchServer(
       amount_paid: invPaid.toFixed(2),
       amount_due: invDue.toFixed(2),
       payment_status: invPaymentStatus,
-    } as any)
+    })
     .eq('id', invoiceId);
 
   await logAuditEventServer({
@@ -400,7 +404,7 @@ export async function logAuditEventServer(params: {
       entity_id: params.entityId,
       metadata: params.metadata || null,
       reason: params.reason || null,
-    } as any);
+    });
   } catch (err) {
     console.warn('Audit event recording notice:', err);
   }

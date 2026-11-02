@@ -89,9 +89,18 @@ export function generateGSTPeriodSummary(
     total: string;
   };
 } {
-  // Filter invoices for the requested period
-  const periodStr = `${periodYear}-${String(periodMonth).padStart(2, '0')}`;
-  const periodInvoices = invoices.filter(inv => inv.invoice_date.startsWith(periodStr));
+  // Filter invoices for the requested period using proper date parsing
+  const periodYearStr = String(periodYear);
+  const periodMonthStr = String(periodMonth).padStart(2, '0');
+  const periodStr = `${periodYearStr}-${periodMonthStr}`;
+  const periodStart = `${periodYearStr}-${periodMonthStr}-01`;
+  const periodEnd = `${periodYearStr}-${periodMonthStr}-31`;
+  const periodInvoices = invoices.filter((inv) => {
+    const invDate = inv.invoice_date;
+    if (!invDate || typeof invDate !== 'string') return false;
+    // Compare as ISO date strings (YYYY-MM-DD format is lexicographically comparable)
+    return invDate >= periodStart && invDate <= periodEnd;
+  });
 
   // GSTR-1: Outward Supplies (Sales)
   const salesInvoices = periodInvoices.filter(inv => inv.invoice_type === 'sales_tax_invoice');

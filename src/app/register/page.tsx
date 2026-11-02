@@ -55,8 +55,8 @@ export default function RegisterPage() {
 
       // Successful registration with active session proceeds to shop onboarding
       router.push('/onboarding');
-    } catch (err: any) {
-      setError(err?.message || 'Registration service is unavailable. Please check your network connection.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration service is unavailable. Please check your network connection.');
       setLoading(false);
     }
   };
@@ -170,7 +170,7 @@ export default function RegisterPage() {
                 </label>
                 <select
                   value={preferredLanguage}
-                  onChange={(e) => setPreferredLanguage(e.target.value as any)}
+                  onChange={(e) => setPreferredLanguage(e.target.value as 'en' | 'hi' | 'bn' | 'mr')}
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="en">English (Default)</option>

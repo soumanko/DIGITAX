@@ -13,8 +13,10 @@ import {
   Building2,
   FileCheck,
   ArrowRight,
-  Info
+  Info,
+  AlertCircle
 } from 'lucide-react';
+import { gstinSchema } from '@/lib/validation/schemas';
 
 const INDIAN_STATES = [
   { code: '01', name: 'Jammu and Kashmir' },
@@ -52,10 +54,12 @@ export default function OnboardingPage() {
   const [taxpayerScheme, setTaxpayerScheme] = useState<'regular' | 'composition_goods' | 'qrmp'>('regular');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gstinError, setGstinError] = useState<string | null>(null);
 
   const handleGstinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.toUpperCase();
     setGstin(val);
+    setGstinError(null);
     if (val.length >= 2) {
       const code = val.slice(0, 2);
       const match = INDIAN_STATES.find(s => s.code === code);
@@ -69,6 +73,18 @@ export default function OnboardingPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setGstinError(null);
+
+    // Validate GSTIN if GST registered (DIGITAX-013)
+    if (isGstRegistered) {
+      try {
+        gstinSchema.parse(gstin.trim());
+      } catch {
+        setGstinError('Invalid GSTIN format. Expected 15-character alphanumeric (e.g., 27AABCS1429B1ZB).');
+        setLoading(false);
+        return;
+      }
+    }
 
     const stateObj = INDIAN_STATES.find(s => s.code === stateCode);
     const shopPayload = {
@@ -112,8 +128,8 @@ export default function OnboardingPage() {
       }
 
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err?.message || 'Network error saving shop profile. Please check your connection.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error saving shop profile. Please check your connection.');
       setLoading(false);
     }
   };
@@ -179,7 +195,13 @@ export default function OnboardingPage() {
                       placeholder="e.g. 27AABCS1429B1ZB"
                       className="font-mono uppercase tracking-wider"
                       hint="First 2 digits represent your state (e.g., 27 for Maharashtra, 07 for Delhi)."
+                      error={gstinError || undefined}
                     />
+                    {gstinError && (
+                      <p className="text-xs text-error-600 mt-1" role="alert">
+                        {gstinError}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
