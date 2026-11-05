@@ -6,11 +6,14 @@ import {
 } from '@/lib/supabase/server-db';
 import { askGnaniEvon, AssistantContext } from '@/lib/ai/gnani';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
+import { csrfMiddleware } from '@/lib/security/csrf';
 import { DEMO_SHOP, DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
+import { money } from '@/lib/decimal';
+import { executeGnaniTool } from '@/lib/ai/tools/registry';
 
 export async function POST(request: NextRequest) {
   try {
-    const isDemoCookie = request.cookies.get('digitax_demo_session')?.value === 'true';
+    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
     const isDev = process.env.NODE_ENV !== 'production';
 
     const ctx = await getAuthenticatedContext();
@@ -36,6 +39,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // CSRF protection
+    const csrfResult = csrfMiddleware(request);
+    if (!csrfResult.valid) {
+      return csrfResult.response as Response;
+    }
+
+    const body = await request.json();
+
+    // Handle tool call requests
+    if (body.tool) {
+      const result = await executeGnaniTool(body.tool, body.args, request.headers);
+      return NextResponse.json(result);
+    }
+
     let assistantContext: AssistantContext;
 
     if (!ctx.userId) {
@@ -46,8 +63,10 @@ export async function POST(request: NextRequest) {
           state: DEMO_SHOP.state,
           taxpayerScheme: DEMO_SHOP.taxpayer_scheme,
           unreconciledCount: DEMO_TRANSACTIONS.filter(t => t.reconciliation_status === 'unmatched').length,
-          openInvoicesTotal: DEMO_INVOICES.reduce((acc, i) => acc + parseFloat(i.amount_due || '0'), 0).toFixed(2),
+          openInvoicesTotal: DEMO_INVOICES.reduce((acc, i) => acc.plus(money(i.amount_due || '0')), money(0)).toString(),
           currentPeriod: 'October 2026',
+          shopId: 'shop-demo-001',
+          userId: 'demo-user-local-dev',
         };
       } else {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -62,7 +81,7 @@ export async function POST(request: NextRequest) {
         getShopTransactionsServer(ctx.shop.id),
       ]);
 
-      const openDue = invoices.reduce((acc, i) => acc + parseFloat(i.amount_due || '0'), 0);
+      const openDue = invoices.reduce((acc, i) => acc.plus(money(i.amount_due || '0')), money(0));
       const unmatched = transactions.filter(t => t.reconciliation_status === 'unmatched').length;
 
       assistantContext = {
@@ -71,12 +90,13 @@ export async function POST(request: NextRequest) {
         state: ctx.shop.state || 'Maharashtra',
         taxpayerScheme: ctx.shop.taxpayer_scheme || 'regular',
         unreconciledCount: unmatched,
-        openInvoicesTotal: openDue.toFixed(2),
+        openInvoicesTotal: openDue.toString(),
         currentPeriod: 'Current Month',
+        shopId: ctx.shop.id,
+        userId: ctx.userId,
       };
     }
 
-    const body = await request.json();
     const { messages, language = 'en' } = body;
 
     if (!Array.isArray(messages) || messages.length === 0) {

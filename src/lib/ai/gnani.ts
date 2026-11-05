@@ -10,6 +10,8 @@
  * authoritative tax or invoice amounts.
  */
 
+import { createClient } from '@/lib/supabase/server';
+
 export interface GnaniMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
@@ -23,6 +25,8 @@ export interface AssistantContext {
   unreconciledCount: number;
   openInvoicesTotal: string;
   currentPeriod: string;
+  shopId: string;
+  userId: string;
 }
 
 const SYSTEM_PROMPT = `You are DIGITAX AI Copilot, powered by GNANI EVON V3.3.
@@ -79,12 +83,12 @@ export async function askGnaniEvon(
     }
   }
 
-  // No OCR/AI provider configured — return truthful unavailability message
+  // No API provider configured — return truthful unavailability message
   // Never fabricate financial data or provide hardcoded fallback responses
   const unavailableMessages: Record<string, string> = {
     en: `I am your DIGITAX GST Copilot for **${context.shopName}**. However, the AI assistant service is not currently configured. Please set the GNANI_EVON_API_KEY environment variable to enable AI-powered assistance. In the meantime, you can use the Dashboard, GST Workspace, and Reconciliation Center to manage your bookkeeping manually.`,
     hi: `मैं आपका DIGITAX GST कॉपिलॉट हूं, **${context.shopName}** के लिए। हालांकि, AI सहायक सेवा वर्तमान में कॉन्फ़िगर नहीं की गई है। AI-संचालित सहायता सक्षम करने के लिए GNANI_EVON_API_KEY पर्यावरण चर सेट करें। तब तक, आप डैशबोर्ड, GST कार्यक्षेत्र, और मिलान केंद्र का उपयोग करके मैनुअल रूप से अपनी बहीखाता प्रबंधन कर सकते हैं।`,
-    bn: `আমি আপনার DIGITAX GST কোপাইলট, **${context.shopName}** এর জন্য। তবে, AI সহায়তা সেবা বর্তমানে কনফিগার করা হয়নি। AI-চালিত সহায়তা সক্রিয় করতে GNANI_EVON_API_KEY পরিবেশ चल extrem সেট করুন।ntil রিলিজ, আপনি ড্যাশবোর্ড, GST কর্মক্ষेत्र, এবং মিলান কেন্দ্র ব্যবহার করে ম্যানুয়ালি আপনার বहीखাত পরিচালনা করতে পারেন।`,
+    bn: `আমি আপনার DIGITAX GST কোপাইলট, **${context.shopName}** এর জন্য। তবে, AI সহায়তা সেবা বর্তমানে কনফিগার করা হয়নি। AI-চালিত সহায়তা সক্রিয় করতে GNANI_EVON_API_KEY এনভায়রনমেন্ট ভেরিয়েবল সেট করুন। পেন্ডিং��, আপনি ড্যাশবোর্ড, GST কর্মক্ষেত্র, এবং মিলান কেন্দ্র ব্যবহার করে ম্যানুয়ালি আপনার বहीখাত পরিচালনা করতে পারেন।`,
     mr: `मी तुमचा DIGITAX GST कॉपिलॉट आहे, **${context.shopName}** साठी. तथापि, AI सहायक सेवा सध्याच्या सेट केलेली नाही. AI-संचालित सहायता सक्षम करण्यासाठी GNANI_EVON_API_KEY वातावरण चल सेट करा. त्यापर्यंत, तुम्ही डॅशबोर्ड, GST कार्यक्षेत्र, आणि मिलान केंद्र वापरून मॅन्युअली तुमचे बहीखाता व्यवस्थापित करू शकता.`,
   };
 

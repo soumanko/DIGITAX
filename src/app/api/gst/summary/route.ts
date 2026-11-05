@@ -3,6 +3,7 @@ import { getAuthenticatedContext, getShopInvoicesServer, logAuditEventServer } f
 import { createClient } from '@/lib/supabase/server';
 import { generateGSTPeriodSummary } from '@/lib/gst/calculator';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
+import { csrfMiddleware } from '@/lib/security/csrf';
 import { DEMO_SHOP, DEMO_INVOICES } from '@/lib/demo-data';
 import type { Invoice } from '@/types';
 
@@ -12,7 +13,7 @@ export async function GET(request: NextRequest) {
     const year = parseInt(searchParams.get('year') || '2026', 10);
     const month = parseInt(searchParams.get('month') || '10', 10);
 
-    const isDemoCookie = request.cookies.get('digitax_demo_session')?.value === 'true';
+    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
     const isDev = process.env.NODE_ENV !== 'production';
 
     const ctx = await getAuthenticatedContext();
@@ -51,6 +52,12 @@ export async function POST(request: NextRequest) {
     const limitResponse = rateLimitResponse(rateLimit);
     if (limitResponse.blocked) {
       return limitResponse.response as Response;
+    }
+
+    // CSRF protection
+    const csrfResult = csrfMiddleware(request);
+    if (!csrfResult.valid) {
+      return csrfResult.response as Response;
     }
 
     const body = await request.json();

@@ -141,7 +141,7 @@ export default function SettingsPage() {
     } catch (err) {
       console.warn('Sign out notice:', err);
     }
-    document.cookie = 'digitax_demo_session=; path=/; max-age=0;';
+    document.cookie = 'dx_demo_session=; path=/; max-age=0;';
     router.push('/login');
   };
 

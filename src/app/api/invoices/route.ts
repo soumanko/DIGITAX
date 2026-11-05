@@ -6,10 +6,11 @@ import { confirmInvoiceSchema } from '@/lib/validation/schemas';
 import { DEMO_INVOICES } from '@/lib/demo-data';
 import { money, roundMoney } from '@/lib/decimal';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
+import { csrfMiddleware } from '@/lib/security/csrf';
 
 export async function GET(request: NextRequest) {
   try {
-    const isDemoCookie = request.cookies.get('digitax_demo_session')?.value === 'true';
+    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
     const isDev = process.env.NODE_ENV !== 'production';
 
     const ctx = await getAuthenticatedContext();
@@ -28,15 +29,55 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
+    const invoiceNumber = searchParams.get('invoice_number') || undefined;
+    const customerName = searchParams.get('customer_name') || undefined;
+    const gstin = searchParams.get('gstin') || undefined;
+    const dateFrom = searchParams.get('date_from') || undefined;
+    const dateTo = searchParams.get('date_to') || undefined;
+    const invoiceStatus = searchParams.get('invoice_status') || undefined;
+    const paymentStatus = searchParams.get('payment_status') || undefined;
+    const minAmount = searchParams.get('min_amount') || undefined;
+    const maxAmount = searchParams.get('max_amount') || undefined;
 
     const supabase = await createClient();
 
-    const { data: invoices, error, count } = await supabase
+    let query = supabase
       .from('invoices')
       .select('*, invoice_items(*)', { count: 'exact' })
       .eq('shop_id', ctx.shop.id)
       .order('invoice_date', { ascending: false })
       .range(offset, offset + limit - 1);
+
+    // Server-side filtering (no client-side filtering of all records)
+    if (invoiceNumber) {
+      query = query.ilike('invoice_number', `%${invoiceNumber}%`);
+    }
+    if (customerName) {
+      query = query.ilike('customer_name', `%${customerName}%`);
+    }
+    if (gstin) {
+      query = query.eq('customer_gstin', gstin);
+    }
+    if (dateFrom) {
+      query = query.gte('invoice_date', dateFrom);
+    }
+    if (dateTo) {
+      query = query.lte('invoice_date', dateTo);
+    }
+    if (invoiceStatus) {
+      query = query.eq('review_state', invoiceStatus);
+    }
+    if (paymentStatus) {
+      query = query.eq('payment_status', paymentStatus);
+    }
+    if (minAmount) {
+      query = query.gte('total_amount', minAmount);
+    }
+    if (maxAmount) {
+      query = query.lte('total_amount', maxAmount);
+    }
+
+    const { data: invoices, error, count } = await query;
 
     if (error) {
       console.error('Error fetching invoices:', error);
@@ -69,6 +110,12 @@ export async function POST(request: NextRequest) {
     const limitResponse = rateLimitResponse(rateLimit);
     if (limitResponse.blocked) {
       return limitResponse.response as Response;
+    }
+
+    // CSRF protection
+    const csrfResult = csrfMiddleware(request);
+    if (!csrfResult.valid) {
+      return csrfResult.response as Response;
     }
 
     const body = await request.json();

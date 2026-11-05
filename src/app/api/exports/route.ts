@@ -3,6 +3,7 @@ import { getAuthenticatedContext, getShopInvoicesServer, getShopTransactionsServ
 import type { DbShop } from '@/types/database';
 import type { Invoice } from '@/types';
 import { generateGSTPeriodSummary } from '@/lib/gst/calculator';
+import { money, roundMoney } from '@/lib/decimal';
 import { DEMO_SHOP, DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
 
 function sanitizeCSVField(val: unknown): string {
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     const year = parseInt(searchParams.get('year') || '2026', 10);
     const month = parseInt(searchParams.get('month') || '10', 10);
 
-    const isDemoCookie = request.cookies.get('digitax_demo_session')?.value === 'true';
+    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
     const isDev = process.env.NODE_ENV !== 'production';
 
     const ctx = await getAuthenticatedContext();
@@ -68,24 +69,23 @@ export async function GET(request: NextRequest) {
               pos: inv.place_of_supply || shop.state_code,
               inv_typ: 'R',
               itms: (inv.lines || inv.invoice_items || []).map((l: { line_number?: number; taxable_value?: string; gst_rate?: string; igst_amount?: string; cgst_amount?: string; sgst_amount?: string }) => ({
-                num: l.line_number || 1,
                 itm_det: {
-                  txval: parseFloat(l.taxable_value || inv.taxable_value),
-                  rt: parseFloat(l.gst_rate || '18'),
-                  iamt: parseFloat(l.igst_amount || inv.igst_amount || '0'),
-                  camt: parseFloat(l.cgst_amount || inv.cgst_amount || '0'),
-                  samt: parseFloat(l.sgst_amount || inv.sgst_amount || '0'),
+                  txval: money(l.taxable_value || inv.taxable_value).toString(),
+                  rt: money(l.gst_rate || '18').toString(),
+                  iamt: money(l.igst_amount || inv.igst_amount || '0').toString(),
+                  camt: money(l.cgst_amount || inv.cgst_amount || '0').toString(),
+                  samt: money(l.sgst_amount || inv.sgst_amount || '0').toString(),
                 },
               })),
             }],
           })),
         b2cs: [{
           sply_ty: 'INTRA',
-          txval: parseFloat(summary.gstr1.b2c_small.taxableValue),
+          txval: money(summary.gstr1.b2c_small.taxableValue).toString(),
           rt: 18,
-          camt: parseFloat(summary.gstr1.b2c_small.cgst),
-          samt: parseFloat(summary.gstr1.b2c_small.sgst),
-          iamt: parseFloat(summary.gstr1.b2c_small.igst),
+          camt: money(summary.gstr1.b2c_small.cgst).toString(),
+          samt: money(summary.gstr1.b2c_small.sgst).toString(),
+          iamt: money(summary.gstr1.b2c_small.igst).toString(),
         }],
       };
 

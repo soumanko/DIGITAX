@@ -5,9 +5,9 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
 import { findMatchSuggestions, MatchCandidate } from '@/lib/reconciliation/engine';
 import { formatINR } from '@/lib/decimal';
+import { Invoice, Transaction } from '@/types';
 import {
   Link2,
   CheckCircle2,
@@ -24,9 +24,9 @@ import {
 } from 'lucide-react';
 
 export default function ReconciliationPage() {
-  const [invoices, setInvoices] = useState(DEMO_INVOICES);
-  const [transactions, setTransactions] = useState(DEMO_TRANSACTIONS);
-  const [confirmedMatches, setConfirmedMatches] = useState<string[]>(['match-pre-1', 'match-pre-2']);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [confirmedMatches, setConfirmedMatches] = useState<string[]>([]);
   const [dismissedMatches, setDismissedMatches] = useState<string[]>([]);
   const [isSubmittingMatch, setIsSubmittingMatch] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);

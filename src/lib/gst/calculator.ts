@@ -88,6 +88,8 @@ export function generateGSTPeriodSummary(
     igst: string;
     total: string;
   };
+  calculationVersion: string;
+  rulesetVersion: string;
 } {
   // Filter invoices for the requested period using proper date parsing
   const periodYearStr = String(periodYear);
@@ -248,5 +250,259 @@ export function generateGSTPeriodSummary(
       igst: netIGST.toFixed(2),
       total: netTotal.toFixed(2),
     },
+    calculationVersion: '1.0.0',
+    rulesetVersion: '1.0.0',
+  };
+}
+
+/**
+ * Composition Scheme GST Calculation
+ *
+ * Composition scheme taxpayers pay a fixed percentage of turnover as tax
+ * (e.g., 1% for manufacturers, 5% for restaurants, 6% for other service providers
+ * under the special composition scheme). They cannot claim ITC and cannot issue
+ * tax invoices - they issue bills of supply instead.
+ *
+ * GST rates for composition scheme (as of current rules):
+ * - Manufacturers and traders: 1% (0.5% CGST + 0.5% SGST intra-state, 1% IGST inter-state)
+ * - Restaurants (not serving alcohol): 5% (2.5% CGST + 2.5% SGST intra-state, 5% IGST inter-state)
+ * - Other service providers (special scheme): 6% (3% CGST + 3% SGST intra-state, 6% IGST inter-state)
+ *
+ * Eligibility: Aggregate turnover up to Rs. 1.5 crore (Rs. 75 lakh for special category states)
+ */
+export const COMPOSITION_SCHEMES = {
+  manufacturer: { id: 'manufacturer', name: 'Manufacturer/Trader', rate: 1, turnoverLimit: 15000000 },
+  restaurant: { id: 'restaurant', name: 'Restaurant (non-alcohol)', rate: 5, turnoverLimit: 15000000 },
+  serviceProvider: { id: 'service_provider', name: 'Service Provider (6% scheme)', rate: 6, turnoverLimit: 5000000 },
+} as const;
+
+export type CompositionSchemeId = keyof typeof COMPOSITION_SCHEMES;
+
+/**
+ * Check if a business is eligible for composition scheme based on turnover.
+ */
+export function isCompositionEligible(turnover: string, stateCategory: 'normal' | 'special' = 'normal'): boolean {
+  const turnoverAmount = money(turnover);
+  const limit = stateCategory === 'special' ? money(7500000) : money(15000000);
+  return turnoverAmount.lessThanOrEqualTo(limit);
+}
+
+/**
+ * Calculate tax under composition scheme.
+ * Composition dealers pay tax on turnover (not taxable value), cannot claim ITC.
+ */
+export function calculateCompositionTax(
+  turnoverAmount: string | number | Decimal,
+  schemeId: CompositionSchemeId,
+  supplierStateCode: string,
+  placeOfSupplyStateCode: string
+): GSTCalculationResult {
+  const turnover = money(turnoverAmount);
+  const scheme = COMPOSITION_SCHEMES[schemeId];
+  const rate = money(scheme.rate);
+  const isInterState = supplierStateCode !== placeOfSupplyStateCode;
+
+  const totalTax = roundMoney(turnover.mul(rate).div(100));
+
+  if (isInterState) {
+    return {
+      taxableValue: turnover,
+      cgst: money(0),
+      sgst: money(0),
+      igst: totalTax,
+      cess: money(0),
+      totalTax,
+      totalInvoiceAmount: roundMoney(turnover.plus(totalTax)),
+      isInterState: true,
+    };
+  }
+
+  // Intra-state: split equally
+  const halfRate = rate.div(2);
+  const cgst = roundMoney(turnover.mul(halfRate).div(100));
+  const sgst = roundMoney(turnover.mul(halfRate).div(100));
+
+  return {
+    taxableValue: turnover,
+    cgst,
+    sgst,
+    igst: money(0),
+    cess: money(0),
+    totalTax: cgst.plus(sgst),
+    totalInvoiceAmount: roundMoney(turnover.plus(cgst).plus(sgst)),
+    isInterState: false,
+  };
+}
+
+/**
+ * Reverse Charge Mechanism (RCM) Calculation
+ *
+ * Under RCM, the recipient (buyer) is liable to pay GST instead of the supplier.
+ * Applicable for:
+ * - Goods/services from unregistered suppliers to registered recipients
+ * - Specific notified goods (e.g., cashew nuts, tobacco leaves)
+ * - Specific notified services (e.g., GTA, legal services, sponsorship)
+ *
+ * The recipient self-invoices and pays both CGST+SGST (intra-state) or IGST (inter-state).
+ * The recipient can claim ITC on the RCM tax paid (subject to eligibility).
+ */
+export interface RCMCalculationResult {
+  taxableValue: Decimal;
+  cgst: Decimal;
+  sgst: Decimal;
+  igst: Decimal;
+  cess: Decimal;
+  totalTax: Decimal;
+  totalAmount: Decimal;
+  isInterState: boolean;
+  rcmApplicable: boolean;
+  rcmReason: string;
+}
+
+/**
+ * Determine if reverse charge applies and calculate tax.
+ * The caller must specify whether RCM applies based on notified goods/services list.
+ * DIGITAX does not auto-determine RCM applicability — the user must confirm.
+ */
+export function calculateRCMTax(
+  taxableAmount: string | number | Decimal,
+  ratePercentage: string | number | Decimal,
+  supplierStateCode: string,
+  placeOfSupplyStateCode: string,
+  rcmApplicable: boolean,
+  rcmReason: string = 'Notified supply under reverse charge'
+): RCMCalculationResult {
+  const taxable = money(taxableAmount);
+  const rate = money(ratePercentage);
+  const isInterState = supplierStateCode !== placeOfSupplyStateCode;
+
+  if (!rcmApplicable) {
+    // Normal forward charge - use standard calculation
+    const result = calculateTaxComponents(taxableAmount, ratePercentage, supplierStateCode, placeOfSupplyStateCode);
+    return {
+      taxableValue: result.taxableValue,
+      cgst: result.cgst,
+      sgst: result.sgst,
+      igst: result.igst,
+      cess: result.cess,
+      totalTax: result.totalTax,
+      totalAmount: result.totalInvoiceAmount,
+      isInterState: result.isInterState,
+      rcmApplicable: false,
+      rcmReason: 'Reverse charge not applicable',
+    };
+  }
+
+  // RCM applies - recipient pays tax
+  let totalTax: Decimal;
+  let cgst: Decimal;
+  let sgst: Decimal;
+  let igst: Decimal;
+
+  if (isInterState) {
+    totalTax = roundMoney(taxable.mul(rate).div(100));
+    cgst = money(0);
+    sgst = money(0);
+    igst = totalTax;
+  } else {
+    const halfRate = rate.div(2);
+    cgst = roundMoney(taxable.mul(halfRate).div(100));
+    sgst = roundMoney(taxable.mul(halfRate).div(100));
+    igst = money(0);
+    totalTax = cgst.plus(sgst);
+  }
+
+  return {
+    taxableValue: taxable,
+    cgst,
+    sgst,
+    igst,
+    cess: money(0),
+    totalTax,
+    totalAmount: roundMoney(taxable.plus(totalTax)),
+    isInterState,
+    rcmApplicable: true,
+    rcmReason,
+  };
+}
+
+/**
+ * Credit/Debit Note Calculation
+ *
+ * Credit Note: Issued by supplier when taxable value or tax charged needs to be reduced
+ * (e.g., goods returned, post-sale discount, defective goods).
+ * Debit Note: Issued by supplier when taxable value or tax charged needs to be increased
+ * (e.g., undercharged, post-sale price increase).
+ *
+ * The note must reference the original invoice and adjust the tax liability accordingly.
+ */
+export interface CreditDebitNoteCalculation {
+  noteType: 'credit_note' | 'debit_note';
+  originalInvoiceNumber: string;
+  originalInvoiceDate: string;
+  taxableValueAdjustment: Decimal;
+  cgstAdjustment: Decimal;
+  sgstAdjustment: Decimal;
+  igstAdjustment: Decimal;
+  totalTaxAdjustment: Decimal;
+  reason: string;
+  gstr1Treatment: string;
+}
+
+/**
+ * Calculate tax adjustments for credit/debit notes.
+ * Credit notes reduce liability; debit notes increase liability.
+ */
+export function calculateCreditDebitNote(
+  noteType: 'credit_note' | 'debit_note',
+  taxableValueChange: string | number | Decimal,
+  ratePercentage: string | number | Decimal,
+  supplierStateCode: string,
+  placeOfSupplyStateCode: string,
+  originalInvoiceNumber: string,
+  originalInvoiceDate: string,
+  reason: string
+): CreditDebitNoteCalculation {
+  const change = money(taxableValueChange);
+  const rate = money(ratePercentage);
+  const isInterState = supplierStateCode !== placeOfSupplyStateCode;
+
+  // Credit note: negative adjustment (reduction)
+  // Debit note: positive adjustment (increase)
+  const multiplier = noteType === 'credit_note' ? -1 : 1;
+  const adjustedTaxable = change.mul(multiplier);
+
+  let cgstAdj: Decimal;
+  let sgstAdj: Decimal;
+  let igstAdj: Decimal;
+
+  if (isInterState) {
+    cgstAdj = money(0);
+    sgstAdj = money(0);
+    igstAdj = roundMoney(adjustedTaxable.mul(rate).div(100));
+  } else {
+    const halfRate = rate.div(2);
+    cgstAdj = roundMoney(adjustedTaxable.mul(halfRate).div(100));
+    sgstAdj = roundMoney(adjustedTaxable.mul(halfRate).div(100));
+    igstAdj = money(0);
+  }
+
+  const totalTaxAdj = cgstAdj.plus(sgstAdj).plus(igstAdj);
+
+  const gstr1Treatment = noteType === 'credit_note'
+    ? 'Credit note: reduces outward supply liability in GSTR-1'
+    : 'Debit note: increases outward supply liability in GSTR-1';
+
+  return {
+    noteType,
+    originalInvoiceNumber,
+    originalInvoiceDate,
+    taxableValueAdjustment: adjustedTaxable,
+    cgstAdjustment: cgstAdj,
+    sgstAdjustment: sgstAdj,
+    igstAdjustment: igstAdj,
+    totalTaxAdjustment: totalTaxAdj,
+    reason,
+    gstr1Treatment,
   };
 }

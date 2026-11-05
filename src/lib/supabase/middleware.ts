@@ -33,7 +33,7 @@ export async function updateSession(request: NextRequest) {
 
   // Refresh session if expired
   let user = null;
-  const isDemoSession = request.cookies.get('digitax_demo_session')?.value === 'true';
+  const isDemoSession = request.cookies.get('dx_demo_session')?.value === 'true';
   const isDevOrTest = process.env.NODE_ENV !== 'production';
 
   try {
@@ -41,14 +41,15 @@ export async function updateSession(request: NextRequest) {
       const { data } = await supabase.auth.getUser();
       user = data.user;
     } else if (isDemoSession && isDevOrTest) {
-      // Isolated mock user exclusively for local development preview
-      user = { id: 'demo-user-123', email: 'rajesh@shreekrishnatraders.in' } as { id: string; email: string };
+      // Isolated mock user exclusively for local development preview.
+      // This identity is clearly synthetic — never impersonates a real account.
+      user = { id: 'demo-user-local-dev', email: 'demo@digitax.local' } as { id: string; email: string };
     }
   } catch (err) {
     console.warn('Supabase auth session verification failed:', err);
     // Explicitly do not grant access on network or database error
     if (isDemoSession && isDevOrTest) {
-      user = { id: 'demo-user-123', email: 'rajesh@shreekrishnatraders.in' } as { id: string; email: string };
+      user = { id: 'demo-user-local-dev', email: 'demo@digitax.local' } as { id: string; email: string };
     }
   }
 
@@ -93,6 +94,28 @@ export async function updateSession(request: NextRequest) {
     'Permissions-Policy',
     'camera=(), geolocation=(), microphone=(self)'
   );
+
+  // Content Security Policy
+  const isDev = process.env.NODE_ENV !== 'production';
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://v0.dev",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https: blob:",
+    "connect-src 'self' https://api.supabase.co https://*.supabase.co https://*.supabase.functions.co https://vercel.live https://v0.dev wss:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ];
+
+  if (isDev) {
+    // Development: allow Vite dev server and inline scripts for HMR
+    cspDirectives[1] = "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://v0.dev ws: wss:";
+    cspDirectives[3] = "connect-src 'self' https://api.supabase.co https://*.supabase.co https://*.supabase.functions.co https://vercel.live https://v0.dev ws: wss: http://localhost:3000";
+  }
+
+  supabaseResponse.headers.set('Content-Security-Policy', cspDirectives.join('; '));
 
   // Add noindex for protected routes
   if (isProtectedRoute || isApiRoute || isAuthRoute) {

@@ -651,15 +651,25 @@ export default function DocumentsPage() {
                   <div className="flex justify-between">
                     <span className="text-text-secondary">Estimated Tax:</span>
                     <span className="font-semibold text-text-primary">
-                      {formatINR(((parseFloat(newInvTaxable) || 0) * (parseFloat(newInvRate) || 0)) / 100)}
+                      {formatINR(
+                        money(newInvTaxable || '0')
+                          .mul(money(newInvRate || '0'))
+                          .div(100)
+                          .toFixed(2)
+                      )}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-text-secondary">Total Amount:</span>
                     <span className="font-bold text-primary-600">
                       {formatINR(
-                        (parseFloat(newInvTaxable) || 0) +
-                          ((parseFloat(newInvTaxable) || 0) * (parseFloat(newInvRate) || 0)) / 100
+                        money(newInvTaxable || '0')
+                          .plus(
+                            money(newInvTaxable || '0')
+                              .mul(money(newInvRate || '0'))
+                              .div(100)
+                          )
+                          .toFixed(2)
                       )}
                     </span>
                   </div>

@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedContext, getShopTransactionsServer, importTransactionsBatchServer } from '@/lib/supabase/server-db';
 import { DEMO_TRANSACTIONS } from '@/lib/demo-data';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
+import { csrfMiddleware } from '@/lib/security/csrf';
 
 export async function GET(request: NextRequest) {
   try {
-    const isDemoCookie = request.cookies.get('digitax_demo_session')?.value === 'true';
+    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
     const isDev = process.env.NODE_ENV !== 'production';
 
     const ctx = await getAuthenticatedContext();
@@ -41,6 +42,12 @@ export async function POST(request: NextRequest) {
     const limitResponse = rateLimitResponse(rateLimit);
     if (limitResponse.blocked) {
       return limitResponse.response as Response;
+    }
+
+    // CSRF protection
+    const csrfResult = csrfMiddleware(request);
+    if (!csrfResult.valid) {
+      return csrfResult.response as Response;
     }
 
     const body = await request.json();

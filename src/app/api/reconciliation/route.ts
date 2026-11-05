@@ -9,12 +9,13 @@ import {
 import { findMatchSuggestions } from '@/lib/reconciliation/engine';
 import { confirmMatchSchema } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
+import { csrfMiddleware } from '@/lib/security/csrf';
 import { DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
 import { Invoice, Transaction } from '@/types';
 
 export async function GET(request: NextRequest) {
   try {
-    const isDemoCookie = request.cookies.get('digitax_demo_session')?.value === 'true';
+    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
     const isDev = process.env.NODE_ENV !== 'production';
 
     const ctx = await getAuthenticatedContext();
@@ -45,6 +46,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // CSRF protection
+  const csrfResult = csrfMiddleware(request);
+  if (!csrfResult.valid) {
+    return csrfResult.response as Response;
+  }
+
   try {
     const ctx = await getAuthenticatedContext();
     if (!ctx.userId || !ctx.shop) {

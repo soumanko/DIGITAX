@@ -1,4 +1,5 @@
 import { createClient } from './server';
+import { cookies } from 'next/headers';
 import type { DbShop, DbInvoice, DbTransaction, DbReconciliationMatch, DbGstSummary, DbDocument } from '@/types/database';
 import { generateGSTPeriodSummary } from '@/lib/gst/calculator';
 import { money } from '@/lib/decimal';
@@ -8,6 +9,7 @@ export interface AuthContext {
   userId: string;
   isDemo: boolean;
   shop: DbShop | null;
+  userRole: string;
 }
 
 /**
@@ -23,13 +25,28 @@ export async function getAuthenticatedContext(requestedShopId?: string | null): 
       userId: '',
       isDemo: false,
       shop: null,
+      userRole: '',
     };
+  }
+
+  // Determine the requested shop ID from parameter or active shop cookie
+  let effectiveShopId = requestedShopId;
+  if (!effectiveShopId) {
+    try {
+      const cookieStore = await cookies();
+      const activeShopCookie = cookieStore.get('dx_active_shop');
+      if (activeShopCookie?.value) {
+        effectiveShopId = activeShopCookie.value;
+      }
+    } catch {
+      // Cookie store not available (e.g., during prerendering)
+    }
   }
 
   let shopQuery = supabase.from('shops').select('*');
 
-  if (requestedShopId) {
-    shopQuery = shopQuery.eq('id', requestedShopId);
+  if (effectiveShopId) {
+    shopQuery = shopQuery.eq('id', effectiveShopId);
   } else {
     shopQuery = shopQuery.order('created_at', { ascending: false }).limit(1);
   }
@@ -41,12 +58,14 @@ export async function getAuthenticatedContext(requestedShopId?: string | null): 
       userId: user.id,
       isDemo: false,
       shop: null,
+      userRole: '',
     };
   }
 
   const activeShop = shops[0] as DbShop;
 
   // Verify membership if user is not the direct owner
+  let membershipRole: string | null = null;
   if (activeShop.owner_id !== user.id) {
     const { data: membership } = await supabase
       .from('shop_members')
@@ -61,14 +80,20 @@ export async function getAuthenticatedContext(requestedShopId?: string | null): 
         userId: user.id,
         isDemo: false,
         shop: null,
+        userRole: '',
       };
     }
+    membershipRole = membership.role;
   }
+
+  // Determine user role
+  const userRole = membershipRole || 'owner';
 
   return {
     userId: user.id,
     isDemo: false,
     shop: activeShop,
+    userRole,
   };
 }
 

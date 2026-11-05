@@ -110,7 +110,7 @@ export default function OnboardingPage() {
       if (!res.ok) {
         // If unauthenticated or demo session in dev, fall back gracefully to local dev preview
         if (res.status === 401 && typeof window !== 'undefined') {
-          const isDemo = document.cookie.includes('digitax_demo_session=true');
+          const isDemo = document.cookie.includes('dx_demo_session=true');
           if (isDemo) {
             localStorage.setItem('digitax_active_shop', JSON.stringify({ ...shopPayload, id: 'shop-demo-001', onboarding_completed: true }));
             router.push('/dashboard');

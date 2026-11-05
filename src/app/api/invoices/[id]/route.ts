@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { confirmInvoiceSchema, updateTransactionSchema } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 import { money, roundMoney, validateInvoiceArithmetic } from '@/lib/decimal';
+import { csrfMiddleware } from '@/lib/security/csrf';
 
 /**
  * GET /api/invoices/[id]
@@ -72,6 +73,12 @@ export async function PUT(
     const limitResponse = rateLimitResponse(rateLimit);
     if (limitResponse.blocked) {
       return limitResponse.response as Response;
+    }
+
+    // CSRF protection
+    const csrfResult = csrfMiddleware(request);
+    if (!csrfResult.valid) {
+      return csrfResult.response as Response;
     }
 
     const { id: invoiceId } = await params;
@@ -225,6 +232,19 @@ export async function DELETE(
     }
 
     const { id: invoiceId } = await params;
+
+    // Rate limit invoice deletion: 30 per minute per shop (moderate)
+    const rateLimit = rateLimiters.moderate(`invoice-delete:${ctx.shop.id}`);
+    const limitResponse = rateLimitResponse(rateLimit);
+    if (limitResponse.blocked) {
+      return limitResponse.response as Response;
+    }
+
+    // CSRF protection
+    const csrfResult = csrfMiddleware(request);
+    if (!csrfResult.valid) {
+      return csrfResult.response as Response;
+    }
 
     const supabase = await createClient();
 

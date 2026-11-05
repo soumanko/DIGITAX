@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -7,7 +7,9 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { formatINR } from '@/lib/decimal';
+import { formatINR, money } from '@/lib/decimal';
+import { escapeHtml } from '@/lib/security/xss-sanitizer';
+import { Invoice } from '@/types';
 import {
   FileText,
   ArrowLeftRight,
@@ -31,10 +33,8 @@ import {
 export default function DashboardPage() {
   const router = useRouter();
   const [shop, setShop] = useState<{ name: string; gstin: string | null; state: string | null; state_code: string | null; business_type: string | null; taxpayer_scheme: string | null; preferred_language: string | null } | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [invoices, setInvoices] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [transactions, setTransactions] = useState<Record<string, unknown>[]>([]);
   const [isDemo, setIsDemo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,24 +98,24 @@ export default function DashboardPage() {
     fetchDashboardData();
   };
 
-  // Financial calculations using decimal.js-safe parse (values already strings from API)
+  // Financial calculations using decimal.js (DIGITAX-004)
   const totalInwardTaxable = invoices
     .filter(i => i.invoice_type === 'purchase_tax_invoice' || i.direction === 'purchase')
-    .reduce((acc, i) => acc + parseFloat(i.taxable_value || '0'), 0);
+    .reduce((acc, i) => acc.plus(money(i.taxable_value || '0')), money(0));
 
   const totalOutwardTaxable = invoices
     .filter(i => i.invoice_type === 'sales_tax_invoice' || i.direction === 'sales')
-    .reduce((acc, i) => acc + parseFloat(i.taxable_value || '0'), 0);
+    .reduce((acc, i) => acc.plus(money(i.taxable_value || '0')), money(0));
 
   const totalITC = invoices
     .filter(i => i.invoice_type === 'purchase_tax_invoice' || i.direction === 'purchase')
-    .reduce((acc, i) => acc + parseFloat(i.total_tax_amount || i.total_tax || '0.00'), 0);
+    .reduce((acc, i) => acc.plus(money(i.cgst_total || '0').plus(money(i.sgst_total || '0')).plus(money(i.igst_total || '0')).plus(money(i.cess_total || '0'))), money(0));
 
   const totalOutwardTax = invoices
     .filter(i => i.invoice_type === 'sales_tax_invoice' || i.direction === 'sales')
-    .reduce((acc, i) => acc + parseFloat(i.total_tax_amount || i.total_tax || '0.00'), 0);
+    .reduce((acc, i) => acc.plus(money(i.cgst_total || '0').plus(money(i.sgst_total || '0')).plus(money(i.igst_total || '0')).plus(money(i.cess_total || '0'))), money(0));
 
-  const netTaxPayable = Math.max(0, totalOutwardTax - totalITC);
+  const netTaxPayable = money(totalOutwardTax.minus(totalITC).isNegative() ? 0 : totalOutwardTax.minus(totalITC).toNumber());
 
   const pendingReviewCount = invoices.filter(i => i.review_state === 'pending_review').length;
   const unmatchedTxnCount = transactions.filter(t => t.reconciliation_status === 'unmatched').length;
@@ -203,13 +203,13 @@ export default function DashboardPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">
-                    {shop.name}
+                    {escapeHtml(shop.name)}
                   </h1>
                   <Badge variant="success">Active</Badge>
-                  <Badge variant="outline">{shop.taxpayer_scheme?.toUpperCase()}</Badge>
+                  <Badge variant="outline">{escapeHtml(shop.taxpayer_scheme || '')}</Badge>
                 </div>
                 <p className="text-xs sm:text-sm text-text-secondary mt-1">
-                  GSTIN: <span className="font-mono font-medium text-text-primary">{shop.gstin || 'Unregistered'}</span> • State: {shop.state} ({shop.state_code}) • {shop.business_type}
+                  GSTIN: <span className="font-mono font-medium text-text-primary">{escapeHtml(shop.gstin || 'Unregistered')}</span> â€¢ State: {escapeHtml(shop.state || '')} ({escapeHtml(shop.state_code || '')}) â€¢ {escapeHtml(shop.business_type || '')}
                 </p>
               </div>
             ) : (
@@ -338,7 +338,7 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-xs text-text-secondary">
-              {netTaxPayable === 0
+              {netTaxPayable.isZero()
                 ? 'ITC fully offsets output GST liability'
                 : 'Net cash tax payment required before GSTR-3B due date'}
             </CardContent>
@@ -387,25 +387,25 @@ export default function DashboardPage() {
                         {invoices.slice(0, 10).map((inv) => (
                           <tr key={inv.id} className="hover:bg-surface-tertiary/50 transition-colors">
                             <td className="px-4 py-3 font-mono font-medium text-text-primary">
-                              {inv.invoice_number}
+                              {escapeHtml(inv.invoice_number)}
                             </td>
                             <td className="px-4 py-3">
                               <div className="font-medium text-text-primary">
                                 {inv.invoice_type === 'purchase_tax_invoice' || inv.direction === 'purchase'
-                                  ? inv.supplier_trade_name || inv.supplier_legal_name || inv.supplier_name || 'Vendor'
-                                  : inv.customer_trade_name || inv.customer_legal_name || inv.customer_name || 'Customer'}
+                                  ? escapeHtml(inv.supplier_trade_name || inv.supplier_legal_name || inv.supplier_name || 'Vendor')
+                                  : escapeHtml(inv.customer_trade_name || inv.customer_legal_name || inv.buyer_name || 'Customer')}
                               </div>
                               <div className="font-mono text-[11px] text-text-tertiary">
                                 {inv.invoice_type === 'purchase_tax_invoice' || inv.direction === 'purchase'
-                                  ? inv.supplier_gstin || 'Unregistered'
-                                  : inv.customer_gstin || 'B2C Retail'}
+                                  ? escapeHtml(inv.supplier_gstin || 'Unregistered')
+                                  : escapeHtml(inv.customer_gstin || 'B2C Retail')}
                               </div>
                             </td>
                             <td className="px-4 py-3 capitalize">
                               {inv.invoice_type === 'purchase_tax_invoice' || inv.direction === 'purchase' ? 'Purchase' : 'Sales'}
                             </td>
                             <td className="px-4 py-3 font-semibold text-text-primary">
-                              {formatINR(inv.total_amount)}
+                              {formatINR(escapeHtml(inv.total_amount))}
                             </td>
                             <td className="px-4 py-3">
                               <span
@@ -415,7 +415,7 @@ export default function DashboardPage() {
                                     : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                                 }`}
                               >
-                                {inv.payment_status || 'unpaid'}
+                                {escapeHtml(inv.payment_status || 'unpaid')}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right">
@@ -428,7 +428,7 @@ export default function DashboardPage() {
                                     : 'destructive'
                                 }
                               >
-                                {(inv.review_state || 'confirmed').replace('_', ' ')}
+                                {escapeHtml((inv.review_state || 'confirmed').replace('_', ' '))}
                               </Badge>
                             </td>
                           </tr>
@@ -492,7 +492,7 @@ export default function DashboardPage() {
                       <div className="font-semibold text-text-primary">Invoices Requiring Review</div>
                       <div className="text-text-secondary mt-0.5">{pendingReviewCount} invoice(s) need human verification before filing.</div>
                       <Link href="/review" className="mt-1.5 inline-block text-[11px] font-bold text-amber-700 hover:underline">
-                        Resolve in Review Center →
+                        Resolve in Review Center â†’
                       </Link>
                     </div>
                   )}
@@ -501,7 +501,7 @@ export default function DashboardPage() {
                       <div className="font-semibold text-text-primary">Unmatched Transactions</div>
                       <div className="text-text-secondary mt-0.5">{unmatchedTxnCount} transaction(s) awaiting reconciliation.</div>
                       <Link href="/reconciliation" className="mt-1.5 inline-block text-[11px] font-bold text-primary-600 hover:underline">
-                        Categorize Transaction →
+                        Categorize Transaction â†’
                       </Link>
                     </div>
                   )}
@@ -519,7 +519,7 @@ export default function DashboardPage() {
                 <div className="mt-4">
                   <Link href="/exports">
                     <Button variant="primary" size="sm">
-                      Proceed to Return Exports →
+                      Proceed to Return Exports â†’
                     </Button>
                   </Link>
                 </div>
@@ -531,3 +531,6 @@ export default function DashboardPage() {
     </DashboardLayout>
   );
 }
+
+
+
