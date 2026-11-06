@@ -200,6 +200,54 @@ body {
 }
 
 /* ============================================
+   DIGITAX-Landing design tokens (oklch)
+   Adapted from attached DIGITAX-Landing design
+   ============================================ */
+
+:root,
+[data-appearance="light"] {
+  --color-background: oklch(0.985 0.012 200);
+  --color-foreground: oklch(0.255 0.055 220);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.255 0.055 220);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.255 0.055 220);
+  --color-primary: oklch(0.395 0.082 220);
+  --color-primary-foreground: oklch(0.985 0.012 200);
+  --color-secondary: oklch(0.958 0.018 200);
+  --color-secondary-foreground: oklch(0.31 0.065 220);
+  --color-muted: oklch(0.948 0.016 205);
+  --color-muted-foreground: oklch(0.5 0.035 215);
+  --color-accent: oklch(0.785 0.14 195);
+  --color-accent-foreground: oklch(0.22 0.06 220);
+  --color-destructive: oklch(0.58 0.18 25);
+  --color-border: oklch(0.91 0.025 205);
+  --color-input: oklch(0.91 0.025 205);
+  --color-ring: oklch(0.62 0.13 195);
+}
+
+[data-appearance="dark"] {
+  --color-background: oklch(0.19 0.035 220);
+  --color-foreground: oklch(0.94 0.02 195);
+  --color-card: oklch(0.24 0.04 220);
+  --color-card-foreground: oklch(0.94 0.02 195);
+  --color-popover: oklch(0.255 0.042 220);
+  --color-popover-foreground: oklch(0.94 0.02 195);
+  --color-primary: oklch(0.75 0.12 195);
+  --color-primary-foreground: oklch(0.19 0.035 220);
+  --color-secondary: oklch(0.29 0.04 215);
+  --color-secondary-foreground: oklch(0.94 0.02 195);
+  --color-muted: oklch(0.27 0.035 215);
+  --color-muted-foreground: oklch(0.74 0.035 205);
+  --color-accent: oklch(0.34 0.055 195);
+  --color-accent-foreground: oklch(0.94 0.02 195);
+  --color-destructive: oklch(0.65 0.15 25);
+  --color-border: oklch(1 0 0 / 12%);
+  --color-input: oklch(1 0 0 / 16%);
+  --color-ring: oklch(0.75 0.12 195);
+}
+
+/* ============================================
    Print Styles
    ============================================ */
 @media print {

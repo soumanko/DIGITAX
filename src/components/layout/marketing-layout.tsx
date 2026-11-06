@@ -23,9 +23,7 @@ export function MarketingHeader() {
       <div className="max-w-7xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="h-9 w-9 rounded-xl bg-primary-600 flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
-            <span className="text-white font-bold text-base">D</span>
-          </div>
+          <img src="/logo.svg" alt="DIGITAX logo" className="h-9 w-9" />
           <span className="font-bold text-xl text-text-primary tracking-tight">
             DIGITAX
           </span>
@@ -119,9 +117,7 @@ export function MarketingFooter() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              <div className="h-8 w-8 rounded-lg bg-primary-600 flex items-center justify-center">
-                <span className="text-white font-bold text-sm">D</span>
-              </div>
+              <img src="/logo.svg" alt="DIGITAX logo" className="h-8 w-8" />
               <span className="font-bold text-lg text-text-primary">DIGITAX</span>
             </div>
             <p className="text-sm text-text-secondary leading-relaxed">

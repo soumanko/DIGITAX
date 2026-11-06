@@ -49,9 +49,7 @@ export function DashboardSidebar() {
           {isMobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-lg bg-primary-600 flex items-center justify-center">
-            <span className="text-white font-bold text-xs">D</span>
-          </div>
+          <img src="/logo.svg" alt="DIGITAX logo" className="h-7 w-7" />
           <span className="font-semibold text-text-primary">DIGITAX</span>
         </Link>
       </div>
@@ -74,9 +72,7 @@ export function DashboardSidebar() {
       >
         {/* Logo */}
         <div className="flex h-14 items-center gap-2 border-b border-border px-5">
-          <div className="h-8 w-8 rounded-lg bg-primary-600 flex items-center justify-center shadow-sm">
-            <span className="text-white font-bold text-sm">D</span>
-          </div>
+          <img src="/logo.svg" alt="DIGITAX logo" className="h-8 w-8" />
           <span className="font-bold text-lg text-text-primary tracking-tight">
             DIGITAX
           </span>
