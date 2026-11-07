@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { AppShell } from '@/components/layout/app-shell';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -122,64 +122,42 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="flex min-h-screen">
-          <div className="hidden lg:flex lg:w-64 border-r border-border bg-surface flex flex-col">
-            <div className="flex h-14 items-center gap-2 border-b border-border px-5">
-              <div className="h-8 w-8 rounded-lg bg-primary-600 flex items-center justify-center shadow-sm">
-                <span className="text-white font-bold text-sm">D</span>
+      <AppShell>
+        <div className="flex flex-col items-center justify-center h-full">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="flex flex-col items-center gap-4">
+              <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900/40 flex items-center justify-center text-primary-600 animate-pulse">
+                <RefreshCw className="h-5 w-5" />
               </div>
-              <span className="font-bold text-lg text-text-primary tracking-tight">DIGITAX</span>
+              <p className="text-sm text-text-secondary">Loading dashboard data...</p>
             </div>
           </div>
-          <main className="flex-1 lg:ml-0 mt-14 lg:mt-0 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-            <div className="flex items-center justify-center min-h-[400px]">
-              <div className="flex flex-col items-center gap-4">
-                <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900/40 flex items-center justify-center text-primary-600 animate-pulse">
-                  <RefreshCw className="h-5 w-5" />
-                </div>
-                <p className="text-sm text-text-secondary">Loading dashboard data...</p>
-              </div>
-            </div>
-          </main>
         </div>
-      </DashboardLayout>
+      </AppShell>
     );
   }
 
   if (error) {
     return (
-      <DashboardLayout>
-        <div className="flex min-h-screen">
-          <div className="hidden lg:flex lg:w-64 border-r border-border bg-surface flex flex-col">
-            <div className="flex h-14 items-center gap-2 border-b border-border px-5">
-              <div className="h-8 w-8 rounded-lg bg-primary-600 flex items-center justify-center shadow-sm">
-                <span className="text-white font-bold text-sm">D</span>
-              </div>
-              <span className="font-bold text-lg text-text-primary tracking-tight">DIGITAX</span>
-            </div>
-          </div>
-          <main className="flex-1 lg:ml-0 mt-14 lg:mt-0 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-            <div className="flex items-center justify-center min-h-[400px]">
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
-                  <h3 className="text-lg font-bold text-text-primary">Failed to Load Dashboard</h3>
-                  <p className="text-sm text-text-secondary max-w-md mx-auto">{error}</p>
-                  <Button onClick={handleRetry} variant="primary" className="mt-4">
-                    <RefreshCw className="h-4 w-4 mr-2" /> Retry
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </main>
+      <AppShell>
+        <div className="flex flex-col items-center justify-center text-center py-20">
+          <Card>
+            <CardContent className="p-8 text-center">
+              <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-text-primary">Failed to Load Dashboard</h3>
+              <p className="text-sm text-text-secondary max-w-md mx-auto">{error}</p>
+              <Button onClick={handleRetry} variant="primary" className="mt-4">
+                <RefreshCw className="h-4 w-4 mr-2" /> Retry
+              </Button>
+            </CardContent>
+          </Card>
         </div>
-      </DashboardLayout>
+      </AppShell>
     );
   }
 
   return (
-    <DashboardLayout>
+    <AppShell>
       <div className="space-y-6">
         {/* Compliance Guardrail Disclaimer Banner */}
         <div className="flex items-center justify-between p-3 rounded-lg bg-surface border border-border shadow-xs text-xs text-text-secondary">
@@ -528,7 +506,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </AppShell>
   );
 }
 

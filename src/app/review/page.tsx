@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { AppShell } from '@/components/layout/app-shell';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,7 +60,7 @@ export default function ReviewCenterPage() {
   };
 
   return (
-    <DashboardLayout>
+    <AppShell>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -213,6 +213,6 @@ export default function ReviewCenterPage() {
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+    </AppShell>
   );
 }
