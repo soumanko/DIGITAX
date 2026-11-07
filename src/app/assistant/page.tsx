@@ -1,391 +1,305 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { AppShell } from '@/components/layout/app-shell';
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { DEMO_SHOP, DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
-import { askGnaniEvon, GnaniMessage } from '@/lib/ai/gnani';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useTheme } from '@/lib/theme-provider';
+import { escapeHtml } from '@/lib/security/xss-sanitizer';
+import { money } from '@/lib/decimal';
 import {
   MessageSquare,
-  Mic,
-  MicOff,
   Send,
   Sparkles,
-  Volume2,
-  VolumeX,
   ShieldCheck,
-  Globe2,
-  HelpCircle,
-  CheckCircle2,
-  AlertCircle
+  Clock,
+  AlertCircle,
+  Copy,
+  ChevronRight,
 } from 'lucide-react';
+import { askGnaniEvon, GnaniMessage } from '@/lib/ai/gnani';
 
-// Browser SpeechRecognition API types (not in standard TypeScript DOM lib)
-interface SpeechRecognition {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
-  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
-  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
-  onend: ((this: SpeechRecognition, ev: Event) => void) | null;
-  start: () => void;
-  stop: () => void;
-}
-interface SpeechRecognitionResult {
-  isFinal: boolean;
-  [index: number]: { transcript: string; confidence: number };
-}
-interface SpeechRecognitionEvent {
-  resultIndex: number;
-  results: SpeechRecognitionResult[];
-  error: string;
-}
-declare const SpeechRecognition: new () => SpeechRecognition;
-
-declare global {
-  interface Window {
-    SpeechRecognition?: typeof SpeechRecognition;
-    webkitSpeechRecognition?: typeof SpeechRecognition;
-  }
+interface AssistantContext {
+  shopName: string;
+  gstin: string | null;
+  state: string;
+  taxpayerScheme: string;
+  unreconciledCount: number;
+  openInvoicesTotal: string;
+  currentPeriod: string;
+  shopId: string;
+  userId: string;
 }
 
 export default function AssistantPage() {
-  const [shopName, setShopName] = useState('Your Business');
+  const { resolvedTheme } = useTheme();
   const [messages, setMessages] = useState<GnaniMessage[]>([
     {
       role: 'assistant',
-      content: 'नमस्ते! I am your DIGITAX GST Copilot, powered by GNANI EVON V3.3.\n\nI can answer questions regarding your sales invoices, eligible Input Tax Credit (ITC), bank statement reconciliation, and GST return preparation. You can speak or type in English, हिंदी, বাংলা, or मराठी.',
+      content: 'नमस्ते! I am your DIGITAX GST Copilot, powered by GNANI EVON V3.3. I can answer questions about your sales invoices, Input Tax Credit, bank reconciliation, and GST return preparation. You can type in English, हिंदी, বাংলা, or मराठी.',
     },
   ]);
   const [input, setInput] = useState('');
-  const [language, setLanguage] = useState<'en' | 'hi' | 'mr' | 'bn'>('hi');
-  const [isRecording, setIsRecording] = useState(false);
+  const [language, setLanguage] = useState<'en' | 'hi' | 'bn' | 'mr'>('en');
   const [isThinking, setIsThinking] = useState(false);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
-
+  const [shopContext, setShopContext] = useState<AssistantContext | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  async function loadShopContext() {
+    try {
+      const res = await fetch('/api/shops');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.shop) {
+          const [invRes] = await Promise.all([fetch('/api/invoices'), fetch('/api/transactions')]);
+          const invData = await invRes.json();
+          const invoices = Array.isArray(invData.invoices)
+            ? (invData.invoices as { amount_due?: string }[])
+            : [];
+          const openDue = invoices.reduce(
+            (acc, i) => acc.plus(money(i.amount_due || '0')),
+            money(0)
+          );
+          setShopContext({
+            shopName: data.shop.name,
+            gstin: data.shop.gstin,
+            state: data.shop.state || 'Maharashtra',
+            taxpayerScheme: data.shop.taxpayer_scheme || 'regular',
+            unreconciledCount: 0,
+            openInvoicesTotal: openDue.toString(),
+            currentPeriod: 'Current Month',
+            shopId: data.shop.id,
+            userId: data.userId || 'unknown',
+          });
+        }
+      }
+    } catch {
+      // Error handled silently
+    }
+  }
 
   useEffect(() => {
-    async function loadShop() {
-      try {
-        const res = await fetch('/api/shops');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.shop?.name) {
-            setShopName(data.shop.name);
-          }
-        }
-      } catch (e) {}
-    }
-    loadShop();
+    const timer = setTimeout(() => loadShopContext(), 0);
+    return () => clearTimeout(timer);
   }, []);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isThinking || !shopContext) return;
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const handleSend = async (textToSend?: string) => {
-    const text = textToSend || input;
-    if (!text.trim() || isThinking) return;
-
-    const userMessage: GnaniMessage = { role: 'user', content: text };
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
+    const userMessage: GnaniMessage = { role: 'user', content: input };
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsThinking(true);
+    setError(null);
 
     try {
       const res = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: newMessages,
+          messages: [userMessage],
           language,
         }),
       });
-
-      if (!res.ok) {
-        throw new Error('Assistant API returned an error');
+      if (res.ok) {
+        const data = await res.json();
+        setMessages((prev) => [...prev, { role: 'assistant', content: data.text || 'No response received' }]);
+      } else {
+        setError('Failed to get response from assistant');
       }
-
-      const result = await res.json();
-      setMessages([...newMessages, { role: 'assistant', content: result.text }]);
-    } catch (err) {
-      setMessages([
-        ...newMessages,
-        {
-          role: 'assistant',
-          content: 'Sorry, I encountered a temporary connection issue. Please check your query or verify network connectivity.',
-        },
-      ]);
+    } catch {
+      setError('Network error connecting to assistant');
     } finally {
       setIsThinking(false);
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  };
+  }, [input, isThinking, shopContext, language]);
 
-  const handleVoiceToggle = () => {
-    setVoiceError(null);
+  const suggestedQuestions = [
+    'What is my current GST liability?',
+    'How many invoices are pending review?',
+    'Which transactions are unmatched?',
+    'What is my Input Tax Credit for this month?',
+  ];
 
-    if (isRecording) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsRecording(false);
-      return;
-    }
+  if (loadingState()) {
+    return (
+      <AppShell>
+        <div className="flex flex-col items-center justify-center h-full">
+          <Skeleton variant="rect" width="full" height="4" className="w-1/2 mb-8" />
+          <div className="space-y-4 w-full max-w-md">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} variant="rect" height="80" className="w-full" />
+            ))}
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
-    if (typeof window === 'undefined') return;
-
-    const SpeechRecognitionCtor =
-      (window as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition })
-        .SpeechRecognition ||
-      (window as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition })
-        .webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      setVoiceError('Speech recognition is not supported in this browser. Please use Chrome, Edge, or type your query.');
-      return;
-    }
-
-    try {
-      const recognition: SpeechRecognition = new SpeechRecognitionCtor!();
-      recognitionRef.current = recognition;
-
-      const langMap: Record<string, string> = {
-        hi: 'hi-IN',
-        mr: 'mr-IN',
-        bn: 'bn-IN',
-        en: 'en-IN',
-      };
-      recognition.lang = langMap[language] || 'en-IN';
-      recognition.interimResults = true;
-      recognition.continuous = false;
-
-      recognition.onstart = () => {
-        setIsRecording(true);
-      };
-
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const transcript = Array.from(event.results)
-          .map((result: SpeechRecognitionResult) => result[0].transcript)
-          .join('');
-        setInput(transcript);
-      };
-
-      recognition.onerror = (event: SpeechRecognitionEvent) => {
-        console.warn('Speech recognition error event:', event.error);
-        if (event.error === 'not-allowed') {
-          setVoiceError('Microphone permission was denied. Please allow microphone access in your browser settings.');
-        } else if (event.error !== 'no-speech') {
-          setVoiceError(`Voice capture error: ${event.error}`);
-        }
-        setIsRecording(false);
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognition.start();
-    } catch (err) {
-      console.warn('Could not start speech recognition:', err);
-      setVoiceError(err instanceof Error ? err.message : 'Could not access microphone.');
-      setIsRecording(false);
-    }
-  };
-
-  const handleSpeakText = (text: string) => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      if (isPlayingAudio) {
-        window.speechSynthesis.cancel();
-        setIsPlayingAudio(false);
-      } else {
-        const utterance = new SpeechSynthesisUtterance(text.replace(/[*#_]/g, ''));
-        const langMap: Record<string, string> = {
-          hi: 'hi-IN',
-          mr: 'mr-IN',
-          bn: 'bn-IN',
-          en: 'en-IN',
-        };
-        utterance.lang = langMap[language] || 'en-IN';
-        utterance.onend = () => setIsPlayingAudio(false);
-        utterance.onerror = () => setIsPlayingAudio(false);
-        window.speechSynthesis.speak(utterance);
-        setIsPlayingAudio(true);
-      }
-    }
-  };
+  function loadingState() {
+    return !shopContext;
+  }
 
   return (
-    <DashboardLayout>
-      <div className="space-y-4 max-w-4xl mx-auto">
-        {/* Compliance Guardrail Banner */}
-        <div className="p-3 rounded-lg bg-surface border border-border flex items-center justify-between text-xs text-text-secondary">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-primary-600 shrink-0" />
-            <span>
-              <strong>AI Guardrails Active:</strong> Copilot answers are generated from your validated books and standard GST rules. Returns must be reviewed prior to portal submission.
-            </span>
-          </div>
-          <Badge variant="secondary">GNANI EVON V3.3</Badge>
-        </div>
+    <AppShell>
+      <div className="flex flex-col h-full">
+        <PageHeader
+          title="GNANI EVON V3.3"
+          description="AI-powered GST bookkeeping assistant for your business."
+          breadcrumbs={[{ label: 'Dashboard' }, { label: 'AI Assistant' }]}
+          action={
+            <Badge variant="accent" size="sm">
+              {language.toUpperCase()}
+            </Badge>
+          }
+        />
 
-        {/* Header & Language Select */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-extrabold text-text-primary tracking-tight flex items-center gap-2">
-              <Sparkles className="h-6 w-6 text-primary-600" />
-              Multilingual Indic Tax Assistant
-            </h1>
-            <p className="text-xs text-text-secondary mt-0.5">
-              Ask questions by voice or text in your preferred language.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Globe2 className="h-4 w-4 text-text-tertiary" />
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as 'en' | 'hi' | 'bn' | 'mr')}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-primary focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="hi">हिंदी (Hindi)</option>
-              <option value="en">English (Indian)</option>
-              <option value="mr">मराठी (Marathi)</option>
-              <option value="bn">বাংলা (Bengali)</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Quick Suggestion Chips */}
-        <div className="flex flex-wrap gap-2 text-xs">
-          <button
-            onClick={() => handleSend('मेरा इस महीने का कुल ITC कितना है?')}
-            className="px-3 py-1 rounded-full bg-surface border border-border hover:border-primary-500 hover:bg-primary-50/50 text-text-secondary transition-all"
-          >
-            💬 कुल ITC कितना है?
-          </button>
-          <button
-            onClick={() => handleSend('Are there any unmatched bank transactions?')}
-            className="px-3 py-1 rounded-full bg-surface border border-border hover:border-primary-500 hover:bg-primary-50/50 text-text-secondary transition-all"
-          >
-            💬 Check unmatched transactions
-          </button>
-          <button
-            onClick={() => handleSend('अक्टूबर का GSTR-3B रिटर्न ड्राफ्ट तैयार है?')}
-            className="px-3 py-1 rounded-full bg-surface border border-border hover:border-primary-500 hover:bg-primary-50/50 text-text-secondary transition-all"
-          >
-            💬 GSTR-3B ड्राफ्ट स्थिति
-          </button>
-        </div>
-
-        {/* Chat Window */}
-        <Card className="border-border shadow-md h-[480px] flex flex-col">
-          <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((msg, idx) => {
-              const isAssistant = msg.role === 'assistant';
-              return (
-                <div
-                  key={idx}
-                  className={`flex ${isAssistant ? 'justify-start' : 'justify-end'}`}
-                >
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {/* Chat Messages */ }
+          <div className="flex-1 overflow-y-auto p-6 bg-surface/50 dark:bg-surface-secondary/50">
+            {messages.length === 0 ? (
+              <EmptyState
+                icon={<MessageSquare className="h-12 w-12 text-text-tertiary" />}
+                title="Start a conversation"
+                description="Ask GNANI about your GST, invoices, or bank reconciliation."
+              />
+            ) : (
+              <div className="space-y-6" ref={messagesEndRef}>
+                {messages.map((msg, idx) => (
                   <div
-                    className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed space-y-2 ${
-                      isAssistant
-                        ? 'bg-surface-secondary border border-border text-text-primary rounded-tl-xs'
-                        : 'bg-primary-600 text-white rounded-tr-xs'
-                    }`}
+                    key={idx}
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className="flex items-center justify-between gap-3 pb-1 border-b border-border/40">
-                      <span className="font-bold text-[11px] opacity-80">
-                        {isAssistant ? 'GNANI EVON V3.3' : 'You'}
-                      </span>
-                      {isAssistant && (
-                        <button
-                          onClick={() => handleSpeakText(msg.content)}
-                          className="opacity-60 hover:opacity-100 transition-opacity"
-                          title="Read out loud (GNANI TIMBRE)"
-                        >
-                          <Volume2 className="h-3.5 w-3.5" />
-                        </button>
+                    <div
+                      className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
+                        msg.role === 'user'
+                          ? 'bg-primary-600 text-white ml-auto'
+                          : 'bg-surface border border-border text-text-primary'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        {msg.role === 'assistant' && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <div className="h-5 w-5 rounded-full bg-gradient-primary flex items-center justify-center text-white shadow-sm">
+                              <Sparkles className="h-2.5 w-2.5" />
+                            </div>
+                            <span className="text-xs font-medium text-primary-600 dark:text-primary-400">GNANI</span>
+                          </div>
+                        )}
+                        <div className="prose prose-sm max-w-none">
+                          {msg.content.split('\n').map((line, i) => (
+                            <p key={i} className="mb-2 last:mb-0">{escapeHtml(line)}</p>
+                          ))}
+                        </div>
+                        {msg.role === 'user' ? (
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(msg.content);
+                            }}
+                            className="ml-2 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-white/20"
+                            title="Copy"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
+                      {msg.role === 'assistant' && (
+                        <p className="text-[10px] text-text-tertiary mt-2 text-right">
+                          AI-generated response • Verify against source records
+                        </p>
                       )}
                     </div>
-                    <div className="whitespace-pre-line">{msg.content}</div>
                   </div>
-                </div>
-              );
-            })}
-
-            {isThinking && (
-              <div className="flex justify-start">
-                <div className="bg-surface-secondary border border-border text-text-primary rounded-2xl rounded-tl-xs p-3 text-xs flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-primary-600 animate-ping" />
-                  <span className="text-text-secondary">Consulting ledger & GST rules...</span>
-                </div>
+                ))}
+                {isThinking && (
+                  <div className="flex justify-start">
+                    <div className="bg-surface border border-border p-4 rounded-2xl shadow-sm flex items-start gap-2 animate-pulse">
+                      <div className="h-5 w-5 rounded-full bg-gradient-primary flex items-center justify-center text-white shadow-sm">
+                        <Sparkles className="h-2.5 w-2.5" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="h-4 bg-surface-tertiary rounded w-3/4 mb-2" />
+                        <div className="h-4 bg-surface-tertiary rounded w-1/2" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {error && (
+                  <div className="flex justify-start">
+                    <div className="bg-error-50 dark:bg-error-50/20 border border-error-200 dark:border-error-800/50 p-4 rounded-2xl text-error-700 dark:text-error-400">
+                      {error}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-            <div ref={messagesEndRef} />
-          </CardContent>
+          </div>
 
-          {/* Input Area */}
-          <CardFooter className="border-t border-border p-3 bg-surface-secondary/40">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSend();
-              }}
-              className="flex items-center gap-2 w-full"
-            >
-              {/* Push-to-Talk Mic Button */}
-              <button
-                type="button"
-                onClick={handleVoiceToggle}
-                className={`p-2.5 rounded-xl transition-all shadow-xs ${
-                  isRecording
-                    ? 'bg-red-600 text-white animate-pulse'
-                    : 'bg-surface border border-border text-text-secondary hover:text-primary-600 hover:border-primary-500'
-                }`}
-                title={isRecording ? 'Listening (GNANI PRISMA STT)...' : 'Push to talk in Hindi/English/Marathi'}
-              >
-                {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-              </button>
-
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={
-                  isRecording
-                    ? 'Listening... बोलिए...'
-                    : language === 'hi'
-                    ? 'अपनी दुकान या GST के बारे में सवाल पूछें...'
-                    : 'Ask questions about invoices, ITC, or reconciliation...'
-                }
-                className="flex-1 text-xs h-10 bg-surface"
-              />
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                className="h-10 px-4"
-                disabled={!input.trim() || isThinking}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+          {/* Input Area */ }
+          <div className="border-t border-border bg-surface p-4">
+            <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+              <div className="flex gap-2">
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as 'en' | 'hi' | 'bn' | 'mr')}
+                  className="bg-surface border border-border rounded-lg px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="en">English</option>
+                  <option value="hi">हिंदी</option>
+                  <option value="bn">বাংলা</option>
+                  <option value="mr">मराठी</option>
+                </select>
+                <Input
+                  placeholder="Ask about GST, invoices, reconciliation…"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  disabled={isThinking || !shopContext}
+                />
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={isThinking || !input.trim() || !shopContext}
+                  isLoading={isThinking}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+              {!shopContext && (
+                <p className="mt-2 text-xs text-text-tertiary">
+                  Loading business context…
+                </p>
+              )}
             </form>
-          </CardFooter>
-        </Card>
+
+            {/* Suggested Questions */ }
+            <div className="mt-4 flex flex-wrap gap-2">
+              <p className="text-xs font-semibold text-text-tertiary uppercase mb-2 ml-1">Suggested questions</p>
+              {suggestedQuestions.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setInput(q);
+                    void handleSubmit({
+                      preventDefault: () => {},
+                    } as React.FormEvent);
+                  }}
+                  disabled={isThinking || !shopContext}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-surface hover:bg-surface-secondary transition-colors text-text-secondary hover:text-text-primary"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
-    </DashboardLayout>
+    </AppShell>
   );
 }

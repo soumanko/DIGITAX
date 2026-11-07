@@ -1,12 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import { AppShell } from '@/components/layout/app-shell';
+import { PageHeader } from '@/components/layout/page-header';
+import { DataTable } from '@/components/ui/data-table';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { DEMO_TRANSACTIONS } from '@/lib/demo-data';
+import { Input } from '@/components/ui/input';
+import { useTheme } from '@/lib/theme-provider';
+import { escapeHtml } from '@/lib/security/xss-sanitizer';
 import { formatINR } from '@/lib/decimal';
 import { Transaction } from '@/types';
 import {
@@ -14,346 +18,259 @@ import {
   UploadCloud,
   Search,
   Filter,
-  CheckCircle2,
-  Clock,
-  ArrowUpRight,
-  ArrowDownLeft,
   FileSpreadsheet,
   Plus,
-  HelpCircle
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
 } from 'lucide-react';
 
-import { parseBankStatementCSV, ParsedCsvTransaction } from '@/lib/csv-parser';
+function DirectionBadge({ direction }: { direction: string }) {
+  const isCredit = direction === 'credit';
+  return (
+    <Badge
+      variant={isCredit ? 'success' : 'error'}
+      size="sm"
+    >
+      {isCredit ? 'Credit (+)' : 'Debit (−)'}
+    </Badge>
+  );
+}
+
+function ReconciliationStatusBadge({ status }: { status: string }) {
+  const variants: Record<string, 'default' | 'success' | 'warning' | 'error' | 'accent'> = {
+    matched: 'success',
+    unmatched: 'warning',
+    partial: 'accent',
+  };
+  return (
+    <Badge variant={variants[status] || 'default'} size="sm">
+      {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+    </Badge>
+  );
+}
 
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(DEMO_TRANSACTIONS);
+  const { resolvedTheme } = useTheme();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'credit' | 'debit' | 'unmatched'>('all');
+  const [loading, setLoading] = useState(true);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [isParsing, setIsParsing] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [parsedPreview, setParsedPreview] = useState<ParsedCsvTransaction[]>([]);
-  const [importErrors, setImportErrors] = useState<string[]>([]);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const fetchTransactions = async () => {
+  const typeOptions = [
+    { label: 'All Transactions', value: 'all' },
+    { label: 'Credits', value: 'credit' },
+    { label: 'Debits', value: 'debit' },
+    { label: 'Unmatched', value: 'unmatched' },
+  ];
+
+  async function loadTransactions() {
+    setLoading(true);
     try {
       const res = await fetch('/api/transactions');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.transactions) && data.transactions.length > 0) {
-          setTransactions(data.transactions);
-        }
+        setTransactions(Array.isArray(data.transactions) ? data.transactions : []);
       }
-    } catch (e) {
-      console.warn('Could not fetch remote transactions, maintaining current view:', e);
+    } catch {
+      // Error handled by empty state
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
-  React.useEffect(() => {
-    const loadData = async () => {
-      await fetchTransactions();
-    };
-    loadData();
+  useEffect(() => {
+    const timer = setTimeout(() => loadTransactions(), 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const filteredTxns = transactions.filter((t) => {
     const matchesSearch =
       (t.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (t.reference_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (t.category || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-    if (filterType === 'credit') return matchesSearch && (t.transaction_type === 'credit' || t.direction === 'credit');
-    if (filterType === 'debit') return matchesSearch && (t.transaction_type === 'debit' || t.direction === 'debit');
+      (t.reference_number || '').toLowerCase().includes(searchTerm.toLowerCase());
+    if (filterType === 'credit') return matchesSearch && t.direction === 'credit';
+    if (filterType === 'debit') return matchesSearch && t.direction === 'debit';
     if (filterType === 'unmatched') return matchesSearch && t.reconciliation_status === 'unmatched';
     return matchesSearch;
   });
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsParsing(true);
-    setImportErrors([]);
-    setParsedPreview([]);
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      const res = parseBankStatementCSV(text);
-      setIsParsing(false);
-
-      if (res.success) {
-        setParsedPreview(res.transactions);
-      } else {
-        setImportErrors(res.errors);
-      }
-    };
-    reader.onerror = () => {
-      setIsParsing(false);
-      setImportErrors(['Error reading CSV file']);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleConfirmImport = async () => {
-    if (parsedPreview.length === 0) return;
-
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactions: parsedPreview }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.transactions)) {
-          setTransactions([...data.transactions, ...transactions]);
-        }
-        setShowImportModal(false);
-        setParsedPreview([]);
-        setStatusMessage(`Successfully imported ${parsedPreview.length} statement transactions.`);
-        setTimeout(() => setStatusMessage(null), 5000);
-      } else {
-        const errorData = await res.json();
-        setImportErrors([errorData.error || 'Failed to import transactions']);
-      }
-    } catch (err) {
-      setImportErrors([err instanceof Error ? err.message : 'Failed to import transactions']);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const totalCredits = filteredTxns
+    .filter((t) => t.direction === 'credit')
+    .reduce((acc, t) => acc + parseFloat(t.amount || '0'), 0);
+  const totalDebits = filteredTxns
+    .filter((t) => t.direction === 'debit')
+    .reduce((acc, t) => acc + parseFloat(t.amount || '0'), 0);
 
   return (
-    <DashboardLayout>
+    <AppShell>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">
-              Bank & UPI Transaction Ledger
-            </h1>
-            <p className="text-xs sm:text-sm text-text-secondary mt-1">
-              Complete cashflow, UPI QR merchant collections, and bank debits synchronized for GST reconciliation.
+        <PageHeader
+          title="Bank Transactions"
+          description="View, import, and reconcile your bank and UPI transactions."
+          breadcrumbs={[{ label: 'Dashboard' }, { label: 'Transactions' }]}
+          action={
+            <Button variant="primary" onClick={() => setShowImportModal(true)}>
+              <UploadCloud className="h-3.5 w-3.5 mr-1.5" /> Import Statement
+            </Button>
+          }
+        />
+
+        {/* Summary Strip */ }
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+            <p className="text-xs font-semibold text-text-tertiary uppercase">Total Credits</p>
+            <p className="text-xl font-bold text-text-primary font-mono mt-1">+{formatINR(String(totalCredits))}</p>
+          </div>
+          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+            <p className="text-xs font-semibold text-text-tertiary uppercase">Total Debits</p>
+            <p className="text-xl font-bold text-text-primary font-mono mt-1">−{formatINR(String(totalDebits))}</p>
+          </div>
+          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+            <p className="text-xs font-semibold text-text-tertiary uppercase">Net Flow</p>
+            <p className={`text-xl font-bold font-mono mt-1 ${totalCredits >= totalDebits ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'}`}>
+              {totalCredits >= totalDebits ? '+' : '−'}{formatINR(String(Math.abs(totalCredits - totalDebits)))}
             </p>
           </div>
-
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setShowImportModal(true)}
-            className="shadow-xs"
-          >
-            <UploadCloud className="h-4 w-4 mr-1.5" />
-            Import Bank Statement (CSV)
-          </Button>
         </div>
 
-        {/* Search & Filter Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-text-tertiary" />
+        {/* Filters */ }
+        <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-3">
             <Input
-              placeholder="Search narration, ref, or UPI ID..."
+              placeholder="Search description or reference…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-9 text-xs"
+              className="w-full sm:w-80"
             />
-          </div>
-
-          <div className="flex items-center gap-1.5 self-start sm:self-auto">
-            <Button
-              variant={filterType === 'all' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilterType('all')}
-              className="text-xs h-8"
-            >
-              All Records ({transactions.length})
-            </Button>
-            <Button
-              variant={filterType === 'credit' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilterType('credit')}
-              className="text-xs h-8"
-            >
-              Credits (Sales)
-            </Button>
-            <Button
-              variant={filterType === 'debit' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilterType('debit')}
-              className="text-xs h-8"
-            >
-              Debits (Payments)
-            </Button>
-            <Button
-              variant={filterType === 'unmatched' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilterType('unmatched')}
-              className="text-xs h-8 text-amber-700 dark:text-amber-400"
-            >
-              Unmatched ({transactions.filter((t) => t.reconciliation_status === 'unmatched').length})
-            </Button>
+            <div className="flex gap-1">
+              {typeOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setFilterType(opt.value as 'all' | 'credit' | 'debit' | 'unmatched')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                    filterType === opt.value
+                      ? 'bg-primary-600 border-primary-600 text-white'
+                      : 'border-border bg-surface-secondary text-text-secondary hover:bg-surface-tertiary'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Transactions Table */}
-        <Card>
-          <CardContent className="p-0">
+        {/* Transactions List */ }
+        <div className="rounded-2xl border border-border bg-surface shadow-sm overflow-hidden">
+          {loading ? (
+            <div className="p-8">
+              <Skeleton variant="rect" width="full" height="4" className="mb-6" />
+              <div className="space-y-3">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} variant="rect" height="60" className="w-full" />
+                ))}
+              </div>
+            </div>
+          ) : filteredTxns.length === 0 ? (
+            <EmptyState
+              icon={<ArrowLeftRight className="h-10 w-10 text-text-tertiary" />}
+              title="No transactions found"
+              description={
+                searchTerm || filterType !== 'all'
+                  ? 'Try adjusting your filters or search terms.'
+                  : 'Import your bank statement to begin tracking transactions.'
+              }
+              action={
+                <Button variant="primary" size="sm" onClick={() => setShowImportModal(true)}>
+                  <UploadCloud className="h-3.5 w-3.5 mr-1.5" /> Import Statement
+                </Button>
+              }
+            />
+          ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-surface-secondary border-b border-border">
                   <tr>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Narration & Reference</th>
-                    <th className="px-4 py-3">Account / Source</th>
-                    <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3 text-right">Amount (₹)</th>
-                    <th className="px-4 py-3 text-right">Reconciliation</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase">Date</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase">Description</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase">Reference</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase">Direction</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase text-right">Amount</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filteredTxns.map((txn) => {
-                    const isCredit = txn.transaction_type === 'credit';
-                    return (
-                      <tr key={txn.id} className="hover:bg-surface-tertiary/50 transition-colors">
-                        <td className="px-4 py-3 font-mono text-text-secondary whitespace-nowrap">
-                          {txn.transaction_date}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-text-primary">
-                            {txn.description}
-                          </div>
-                          <div className="font-mono text-[11px] text-text-tertiary">
-                            Ref: {txn.reference_number || 'N/A'} {txn.upi_id ? `• UPI: ${txn.upi_id}` : ''}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-text-secondary">
-                          {txn.bank_account_name || 'Bank Account'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-0.5 rounded-md bg-surface-secondary border border-border text-[11px] font-medium text-text-secondary">
-                            {txn.category || 'Uncategorized'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right font-bold whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center gap-1 ${
-                              isCredit ? 'text-emerald-600' : 'text-text-primary'
-                            }`}
-                          >
-                            {isCredit ? (
-                              <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600" />
-                            ) : (
-                              <ArrowUpRight className="h-3.5 w-3.5 text-text-tertiary" />
-                            )}
-                            {formatINR(txn.amount)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <Badge
-                            variant={
-                              txn.reconciliation_status === 'matched'
-                                ? 'success'
-                                : txn.reconciliation_status === 'partial'
-                                ? 'accent'
-                                : 'outline'
-                            }
-                          >
-                            {txn.reconciliation_status === 'matched' ? 'Reconciled' : 'Unmatched'}
-                          </Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {filteredTxns.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-surface-secondary transition-colors group">
+                      <td className="px-4 py-3.5">
+                        <span className="text-sm font-medium text-text-primary">
+                          {tx.transaction_date ? new Date(tx.transaction_date).toLocaleDateString('en-IN') : '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <p className="text-sm font-medium text-text-primary truncate" title={escapeHtml(tx.description || '')}>
+                          {escapeHtml(tx.description || 'Untitled')}
+                        </p>
+                        {tx.category && (
+                          <p className="text-xs text-text-tertiary">{escapeHtml(tx.category.replace('_', ' '))}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="text-xs text-text-tertiary font-mono">
+                          {escapeHtml(tx.reference_number || '—')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <DirectionBadge direction={tx.direction} />
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <span className={`text-sm font-bold font-mono ${tx.direction === 'credit' ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'}`}>
+                          {tx.direction === 'credit' ? '+' : '−'}{formatINR(tx.amount || '0')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <ReconciliationStatusBadge status={tx.reconciliation_status || 'unmatched'} />
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
 
-        {/* Real CSV Import Modal */}
-        {showImportModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
-            <Card className="max-w-xl w-full shadow-2xl border-border">
-              <CardHeader className="border-b border-border pb-3">
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <FileSpreadsheet className="h-5 w-5 text-primary-600" />
-                  Import Bank / UPI Statement CSV
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Upload standard bank export statements (HDFC, SBI, ICICI, Axis, PhonePe, Paytm QR).
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 space-y-4 text-xs">
-                {importErrors.length > 0 && (
-                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300">
-                    {importErrors.map((err, i) => (
-                      <div key={i}>{err}</div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="p-4 rounded-xl border-2 border-dashed border-border text-center space-y-2 bg-surface-secondary/40 relative">
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={handleFileUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <UploadCloud className="h-8 w-8 text-primary-600 mx-auto" />
-                  <div className="font-semibold text-text-primary">
-                    {isParsing ? 'Parsing statement CSV...' : 'Click to select CSV file, or drag & drop'}
-                  </div>
-                  <div className="text-[11px] text-text-tertiary">
-                    Parses dates, narrations, debits, credits, and UTR reference codes automatically
-                  </div>
-                </div>
-
-                {parsedPreview.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between font-bold text-text-primary">
-                      <span>Statement Preview ({parsedPreview.length} rows found)</span>
-                      <span className="text-[11px] font-normal text-text-secondary">Ready to import</span>
-                    </div>
-                    <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-                      {parsedPreview.slice(0, 15).map((row, idx) => (
-                        <div key={idx} className="p-2 flex items-center justify-between text-[11px] hover:bg-surface-secondary">
-                          <div>
-                            <span className="font-mono text-text-tertiary mr-2">{row.transaction_date}</span>
-                            <span className="font-medium text-text-primary">{row.description}</span>
-                          </div>
-                          <span className={`font-mono font-semibold ${row.direction === 'credit' ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {row.direction === 'credit' ? '+' : '-'}₹{row.amount}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                  <Button variant="ghost" size="sm" onClick={() => setShowImportModal(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={handleConfirmImport}
-                    disabled={parsedPreview.length === 0}
-                    isLoading={isSubmitting}
-                  >
-                    Confirm Import ({parsedPreview.length} Transactions)
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+        {/* Import Modal */ }
+        <div className="fixed inset-0 z-50 hidden" aria-hidden={!showImportModal}>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowImportModal(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-surface border border-border rounded-3xl shadow-2xl w-full max-w-2xl p-6 animate-scale-in">
+              <div className="flex items-start justify-between mb-6">
+                <h3 className="text-lg font-bold text-text-primary">Import Bank Statement</h3>
+                <button onClick={() => setShowImportModal(false)} className="p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-tertiary">
+                  <span className="sr-only">Close</span>
+                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-sm text-text-secondary mb-6">
+                Upload a CSV bank statement to import transactions. Supported formats: HDFC, ICICI, SBI, UPI.
+              </p>
+              <input
+                type="file"
+                accept=".csv"
+                className="block w-full text-sm text-text-tertiary file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-600 file:text-white hover:file:bg-primary-700 mb-4"
+              />
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => setShowImportModal(false)}>Cancel</Button>
+                <Button variant="primary">Import Transactions</Button>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
       </div>
-    </DashboardLayout>
+    </AppShell>
   );
 }

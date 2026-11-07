@@ -17,9 +17,14 @@ const badgeVariants = cva(
         accent: 'bg-accent-100 text-accent-700',
         outline: 'border border-border text-text-secondary',
       },
+      size: {
+        sm: 'px-2 py-0.5 text-[10px]',
+        md: 'px-2.5 py-0.5 text-xs',
+      },
     },
     defaultVariants: {
       variant: 'default',
+      size: 'md',
     },
   }
 );
@@ -28,9 +33,9 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
+function Badge({ className, variant, size, ...props }: BadgeProps) {
   return (
-    <span className={cn(badgeVariants({ variant }), className)} {...props} />
+    <span className={cn(badgeVariants({ variant, size }), className)} {...props} />
   );
 }
 

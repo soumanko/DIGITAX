@@ -7,18 +7,32 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
-import { ShieldCheck, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, User, AlertCircle, ArrowRight } from 'lucide-react';
+import { z } from 'zod';
 
-export default function RegisterPage() {
+const registerSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  confirmPassword: z.string(),
+  businessName: z.string().min(2, 'Business name is required'),
+  gstin: z.string().optional(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+});
+
+function RegisterForm() {
   const router = useRouter();
-  const [fullName, setFullName] = useState('');
-  const [shopName, setShopName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [preferredLanguage, setPreferredLanguage] = useState<'en' | 'hi' | 'bn' | 'mr'>('en');
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    businessName: '',
+    gstin: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmationNeeded, setConfirmationNeeded] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,18 +40,17 @@ export default function RegisterPage() {
     setError(null);
 
     try {
+      const validation = registerSchema.safeParse(formData);
+      if (!validation.success) {
+        setError(validation.error.issues[0]?.message || 'Invalid input');
+        setLoading(false);
+        return;
+      }
+
       const supabase = createClient();
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            shop_name: shopName,
-            preferred_language: preferredLanguage,
-          },
-          emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/confirm?next=/onboarding`,
-        },
+        email: formData.email,
+        password: formData.password,
       });
 
       if (signUpError) {
@@ -46,161 +59,162 @@ export default function RegisterPage() {
         return;
       }
 
-      // If email confirmation is required, session will be null
-      if (data?.user && !data.session) {
-        setConfirmationNeeded(true);
-        setLoading(false);
-        return;
-      }
-
-      // Successful registration with active session proceeds to shop onboarding
-      router.push('/onboarding');
+      setError('Account created. Please check your email to confirm your address.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration service is unavailable. Please check your network connection.');
+      setError(err instanceof Error ? err.message : 'Registration failed.');
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-surface-secondary">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <Link href="/" className="inline-flex items-center gap-2 group mb-4">
-          <div className="h-10 w-10 rounded-xl bg-primary-600 flex items-center justify-center shadow-md">
-            <span className="text-white font-bold text-lg">D</span>
+    <Card className="border border-border bg-surface shadow-sm">
+      <CardContent className="pt-6 pb-4">
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-error-50 dark:bg-error-50/20 border border-error-200 dark:border-error-800 text-xs text-error-700 dark:text-error-400 flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
-          <span className="font-extrabold text-2xl text-text-primary tracking-tight">DIGITAX</span>
-        </Link>
-        <h2 className="text-2xl font-bold text-text-primary tracking-tight">
+        )}
+
+        <form onSubmit={handleRegister} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">Business Name</label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+              <Input
+                required
+                placeholder="Shree Krishna Traders"
+                value={formData.businessName}
+                onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">GSTIN (optional)</label>
+            <div className="relative">
+              <Card className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 bg-surface border border-border flex items-center justify-center pointer-events-none z-10">
+                <span className="text-[10px] text-text-tertiary font-mono">IN</span>
+              </Card>
+              <Input
+                placeholder="27AABCS1429B1ZB"
+                value={formData.gstin}
+                onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
+                className="pl-10"
+              />
+            </div>
+            <p className="text-xs text-text-tertiary mt-1">15-character GSTIN with state code prefix</p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">Email address</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+              <Input
+                type="email"
+                required
+                placeholder="owner@yourshop.in"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                autoComplete="email"
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-text-secondary">Password</label>
+            </div>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                required
+                placeholder="••••••••"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                autoComplete="new-password"
+                className="pl-10 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-tertiary hover:text-text-primary transition-colors"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7h9.543c-.477.208-.948.422-1.425.825zM18 12a6 6 0 11-12 0 6 6 0 0112 0z" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.543 7h-1.21c-.599-.422-1.529-.713-2.459-.813zM15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">Confirm Password</label>
+            <Input
+              type={showPassword ? 'text' : 'password'}
+              required
+              placeholder="••••••••"
+              value={formData.confirmPassword}
+              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+              autoComplete="new-password"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full mt-2"
+            isLoading={loading}
+          >
+            Create Account
+          </Button>
+        </form>
+      </CardContent>
+      <CardFooter className="border-t border-border bg-surface-secondary/50 py-3 text-center text-xs text-text-tertiary">
+        <span className="flex items-center justify-center gap-1 w-full">
+          Already have an account?{' '}
+          <Link href="/login" className="font-semibold text-primary-600 hover:text-primary-500 dark:hover:text-primary-400">
+            Sign in
+          </Link>
+        </span>
+      </CardFooter>
+    </Card>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-surface-secondary">
+      <div className="sm:w-full sm:max-w-md text-center">
+        <div className="flex justify-center mb-6">
+          <div className="h-12 w-12 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-primary-500/30">
+            <span className="text-white font-bold text-xl">D</span>
+          </div>
+        </div>
+        <h2 className="text-2xl font-bold text-text-primary tracking-tight mb-2">
           Create your business account
         </h2>
-        <p className="mt-2 text-sm text-text-secondary">
-          Already registered?{' '}
-          <Link href="/login" className="font-semibold text-primary-600 hover:text-primary-500">
-            Sign in here
-          </Link>
+        <p className="text-sm text-text-secondary mb-6">
+          Join DIGITAX to manage your GST bookkeeping and invoicing.
         </p>
-      </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <Card className="shadow-lg border-border">
-          <CardContent className="pt-6">
-            {confirmationNeeded ? (
-              <div className="text-center py-6 space-y-3">
-                <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="h-6 w-6" />
-                </div>
-                <h3 className="text-base font-bold text-text-primary">Verify your business email</h3>
-                <p className="text-xs text-text-secondary max-w-sm mx-auto">
-                  We have sent a verification link to <strong className="text-text-primary">{email}</strong>. Please check your inbox and click the link to activate your shop account.
-                </p>
-                <div className="pt-4 space-y-2">
-                  <Link href="/login">
-                    <Button variant="primary" className="w-full">
-                      Proceed to Sign In
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <>
-                {error && (
-                  <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>{error}</span>
-                  </div>
-                )}
+        <div className="mx-auto">
+          <RegisterForm />
+        </div>
 
-                <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">
-                  Owner / Manager Full Name
-                </label>
-                <Input
-                  required
-                  placeholder="e.g. Rajesh Sharma"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">
-                  Shop / Business Name
-                </label>
-                <Input
-                  required
-                  placeholder="e.g. Shree Krishna General Store"
-                  value={shopName}
-                  onChange={(e) => setShopName(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">
-                  Email Address
-                </label>
-                <Input
-                  type="email"
-                  required
-                  placeholder="rajesh@krishnastore.in"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">
-                  Password (min 8 characters)
-                </label>
-                <Input
-                  type="password"
-                  required
-                  minLength={8}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="new-password"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">
-                  Preferred Language for Assistant & Voice
-                </label>
-                <select
-                  value={preferredLanguage}
-                  onChange={(e) => setPreferredLanguage(e.target.value as 'en' | 'hi' | 'bn' | 'mr')}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="en">English (Default)</option>
-                  <option value="hi">हिंदी (Hindi)</option>
-                  <option value="bn">বাংলা (Bengali)</option>
-                  <option value="mr">मराठी (Marathi)</option>
-                </select>
-              </div>
-
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="w-full"
-                  isLoading={loading}
-                >
-                  Register Business <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            </form>
-          </>
-        )}
-      </CardContent>
-          <CardFooter className="border-t border-border bg-surface-secondary/50 py-3 text-center text-xs text-text-tertiary">
-            <span className="flex items-center justify-center gap-1 w-full">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-              Free 30-day trial • No credit card required
-            </span>
-          </CardFooter>
-        </Card>
+        <p className="mt-6 text-xs text-text-secondary">
+          By creating an account, you agree to our Terms of Service and Privacy Policy.
+        </p>
       </div>
     </div>
   );

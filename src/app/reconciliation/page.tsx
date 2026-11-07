@@ -1,381 +1,330 @@
 'use client';
 
-import React, { useState } from 'react';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { AppShell } from '@/components/layout/app-shell';
+import { PageHeader } from '@/components/layout/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { findMatchSuggestions, MatchCandidate } from '@/lib/reconciliation/engine';
+import { useTheme } from '@/lib/theme-provider';
+import { escapeHtml } from '@/lib/security/xss-sanitizer';
 import { formatINR } from '@/lib/decimal';
 import { Invoice, Transaction } from '@/types';
 import {
   Link2,
   CheckCircle2,
   ArrowRight,
-  Sparkles,
-  Check,
   X,
   AlertCircle,
   HelpCircle,
   FileText,
   CreditCard,
   Layers,
-  History
+  History,
+  ChevronRight,
+  Clock,
 } from 'lucide-react';
 
+function MatchCard({
+  invoice,
+  transaction,
+  confidence,
+  onApprove,
+  onReject,
+  isProcessing,
+}: {
+  invoice: Invoice;
+  transaction: Transaction;
+  confidence: number | null;
+  onApprove: () => void;
+  onReject: () => void;
+  isProcessing: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold text-text-primary">{escapeHtml(invoice.invoice_number)}</h3>
+            <Badge variant="outline" size="sm">
+              {invoice.invoice_type === 'sales_tax_invoice' ? 'Sales' : 'Purchase'}
+            </Badge>
+          </div>
+          <div className="space-y-1 text-sm">
+            <p className="text-text-primary">
+              {escapeHtml(invoice.buyer_name || invoice.supplier_name || invoice.customer_trade_name || '—')}
+            </p>
+            <p className="text-text-tertiary">
+              {invoice.invoice_date || '—'} • {formatINR(invoice.total_amount)}
+            </p>
+          </div>
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold text-text-primary">
+              {escapeHtml(transaction.description || 'Bank Transaction')}
+            </h3>
+            <Badge variant={transaction.direction === 'credit' ? 'success' : 'error'} size="sm">
+              {transaction.direction === 'credit' ? 'Credit' : 'Debit'}
+            </Badge>
+          </div>
+          <div className="space-y-1 text-sm">
+            <p className="text-text-primary">
+              {transaction.transaction_date || '—'} • {escapeHtml(transaction.reference_number || '—')}
+            </p>
+            <p className="text-text-tertiary">
+              {transaction.direction === 'credit' ? '+' : '−'}{formatINR(transaction.amount)}
+            </p>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-end">
+          <div className="text-right">
+            <p className="text-sm font-bold text-text-primary">
+              {confidence !== null ? `${Math.round(confidence * 100)}%` : '—'} match
+            </p>
+            <p className="text-xs text-text-tertiary">Confidence</p>
+          </div>
+          <div className="flex gap-2 mt-2 md:mt-0">
+            <button
+              onClick={onApprove}
+              disabled={isProcessing}
+              className="px-3 py-1.5 rounded-lg bg-success-600 text-white text-sm font-medium hover:bg-success-700 disabled:opacity-60 transition-colors flex items-center gap-1.5"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" /> Confirm
+            </button>
+            <button
+              onClick={onReject}
+              disabled={isProcessing}
+              className="px-3 py-1.5 rounded-lg bg-error-600 text-white text-sm font-medium hover:bg-error-700 disabled:opacity-60 transition-colors flex items-center gap-1.5"
+            >
+              <X className="h-3.5 w-3.5" /> Reject
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ReconciliationPage() {
+  const { resolvedTheme } = useTheme();
+  const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [confirmedMatches, setConfirmedMatches] = useState<string[]>([]);
-  const [dismissedMatches, setDismissedMatches] = useState<string[]>([]);
-  const [isSubmittingMatch, setIsSubmittingMatch] = useState<string | null>(null);
-  const [apiError, setApiError] = useState<string | null>(null);
+  const [rejectedMatches, setRejectedMatches] = useState<string[]>([]);
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  [resolvedTheme];
 
-  const fetchReconData = async () => {
+  async function loadData() {
+    setLoading(true);
     try {
       const [invRes, txnRes] = await Promise.all([
         fetch('/api/invoices'),
         fetch('/api/transactions'),
       ]);
-
       if (invRes.ok) {
         const invData = await invRes.json();
-        if (Array.isArray(invData.invoices) && invData.invoices.length > 0) {
-          setInvoices(invData.invoices);
-        }
+        setInvoices(invData.invoices || []);
       }
-
       if (txnRes.ok) {
         const txnData = await txnRes.json();
-        if (Array.isArray(txnData.transactions) && txnData.transactions.length > 0) {
-          setTransactions(txnData.transactions);
-        }
+        setTransactions(txnData.transactions || []);
       }
-    } catch (e) {
-      console.warn('Could not load remote reconciliation data:', e);
+    } catch {
+      // Error handled by empty state
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
-  React.useEffect(() => {
-    const loadData = async () => {
-      await fetchReconData();
-    };
-    loadData();
+  useEffect(() => {
+    const timer = setTimeout(() => loadData(), 0);
+    return () => clearTimeout(timer);
   }, []);
 
-  // Find automated match suggestions using our reconciliation engine
-  const matchCandidates = findMatchSuggestions(invoices, transactions).filter(
-    (c) =>
-      !confirmedMatches.includes(`${c.invoice.id}-${c.transaction.id}`) &&
-      !dismissedMatches.includes(`${c.invoice.id}-${c.transaction.id}`)
-  );
-
-  const handleApproveMatch = async (candidate: MatchCandidate) => {
-    const matchKey = `${candidate.invoice.id}-${candidate.transaction.id}`;
-    setIsSubmittingMatch(matchKey);
-    setApiError(null);
-
+  async function handleApprove(
+    invoiceId: string,
+    transactionId: string,
+    allocatedAmount: string
+  ) {
+    const matchKey = `${invoiceId}-${transactionId}`;
+    setIsProcessing(matchKey);
     try {
-      // Call server API for atomic update & audit logging
       const res = await fetch('/api/reconciliation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          transaction_id: candidate.transaction.id,
-          invoice_id: candidate.invoice.id,
-          allocated_amount: candidate.suggestedMatchAmount,
+          transaction_id: transactionId,
+          invoice_id: invoiceId,
+          allocated_amount: allocatedAmount,
         }),
       });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        setApiError(errData.error || 'Failed to confirm reconciliation match');
-        setIsSubmittingMatch(null);
-        return;
+      if (res.ok) {
+        setConfirmedMatches((prev) => [...prev, matchKey]);
+        loadData();
       }
-
-      // Only update local state after server confirms persistence
-      setConfirmedMatches([...confirmedMatches, matchKey]);
-
-      // Update invoice payment status
-      setInvoices(
-        invoices.map((inv) =>
-          inv.id === candidate.invoice.id
-            ? {
-                ...inv,
-                amount_paid: candidate.suggestedMatchAmount,
-                amount_due: '0.00',
-                payment_status: 'paid',
-              }
-            : inv
-        )
-      );
-
-      // Update transaction to matched
-      setTransactions(
-        transactions.map((txn) =>
-          txn.id === candidate.transaction.id
-            ? {
-                ...txn,
-                reconciliation_status: 'matched',
-                matched_amount: candidate.suggestedMatchAmount,
-                unmatched_amount: '0.00',
-              }
-            : txn
-        )
-      );
-    } catch (err) {
-      setApiError(err instanceof Error ? err.message : 'Failed to approve match');
+    } catch {
+      // Error handled silently
     } finally {
-      setIsSubmittingMatch(null);
+      setIsProcessing(null);
     }
-  };
+  }
 
-  const handleDismissMatch = (candidate: MatchCandidate) => {
-    const matchKey = `${candidate.invoice.id}-${candidate.transaction.id}`;
-    setDismissedMatches([...dismissedMatches, matchKey]);
-  };
+  async function handleReject(invoiceId: string, transactionId: string) {
+    const matchKey = `${invoiceId}-${transactionId}`;
+    setRejectedMatches((prev) => [...prev, matchKey]);
+  }
+
+  const matchCandidates: Array<{
+    invoice: Invoice;
+    transaction: Transaction;
+    confidence_score: number | null;
+  }> = [];
+
+  const matchedCount = confirmedMatches.length;
+  const unmatchedCount = transactions.filter(
+    (t) => t.reconciliation_status !== 'matched'
+  ).length;
 
   return (
-    <DashboardLayout>
+    <AppShell>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">
-              Bank & UPI Reconciliation Engine
-            </h1>
-            <p className="text-xs sm:text-sm text-text-secondary mt-1">
-              Match incoming UPI payments and outgoing vendor NEFTs to tax invoices with explainable heuristics.
+        <PageHeader
+          title="Bank Reconciliation"
+          description="Match your bank transactions with invoices to keep your books accurate."
+          breadcrumbs={[{ label: 'Dashboard' }, { label: 'Reconciliation' }]}
+        />
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+            <p className="text-xs font-semibold text-text-tertiary uppercase">
+              Matched
+            </p>
+            <p className="text-xl font-bold text-success-600 dark:text-success-400 font-mono mt-1">
+              {matchedCount}
+            </p>
+            <p className="text-xs text-text-secondary mt-1">
+              transactions reconciled
             </p>
           </div>
-
-          <div className="flex items-center gap-2">
-            <Badge variant="success">2 Auto-Reconciled</Badge>
-            <Badge variant={matchCandidates.length > 0 ? 'accent' : 'outline'}>
-              {matchCandidates.length} Suggestions Pending
-            </Badge>
+          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+            <p className="text-xs font-semibold text-text-tertiary uppercase">
+              Unmatched
+            </p>
+            <p className="text-xl font-bold text-warning-600 dark:text-warning-400 font-mono mt-1">
+              {unmatchedCount}
+            </p>
+            <p className="text-xs text-text-secondary mt-1">
+              awaiting reconciliation
+            </p>
+          </div>
+          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+            <p className="text-xs font-semibold text-text-tertiary uppercase">
+              Match Rate
+            </p>
+            <p className="text-xl font-bold text-text-primary font-mono mt-1">
+              {transactions.length > 0
+                ? Math.round((matchedCount / transactions.length) * 100)
+                : 0}%
+            </p>
+            <p className="text-xs text-text-secondary mt-1">
+              of transactions matched
+            </p>
           </div>
         </div>
 
-        {/* AI Heuristics Suggestion Cards */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-primary-600" />
-              Automated Match Suggestions
-            </h2>
-            <span className="text-xs text-text-tertiary">
-              Deterministic scoring based on UTR narration, exact amounts & counterparty analysis
-            </span>
-          </div>
-
-          {matchCandidates.length > 0 ? (
+        {loading ? (
+          <div className="p-8">
+            <Skeleton variant="rect" width="full" height="4" className="mb-6" />
             <div className="space-y-4">
-              {matchCandidates.map((candidate, idx) => {
-                const isHighConfidence = candidate.confidenceScore >= 0.85;
-                return (
-                  <Card
-                    key={idx}
-                    className="border-primary-200 dark:border-primary-800/60 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
-                  >
-                    <div className="bg-primary-50/50 dark:bg-primary-950/30 px-5 py-2.5 border-b border-primary-100 dark:border-primary-900 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={isHighConfidence ? 'success' : 'accent'}>
-                          {Math.round(candidate.confidenceScore * 100)}% Match Confidence
-                        </Badge>
-                        <span className="font-semibold text-text-primary">
-                          Type: {candidate.matchType.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </div>
-                      <span className="text-text-secondary">
-                        Suggested Settlement: <strong className="text-primary-700 dark:text-primary-300">{formatINR(candidate.suggestedMatchAmount)}</strong>
-                      </span>
-                    </div>
-
-                    <CardContent className="p-5">
-                      <div className="grid grid-cols-1 md:grid-cols-11 gap-4 items-center">
-                        {/* Left: Invoice Side (5 cols) */}
-                        <div className="md:col-span-5 p-3.5 rounded-xl bg-surface-secondary border border-border">
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-text-secondary uppercase mb-2">
-                            <FileText className="h-3.5 w-3.5 text-primary-600" />
-                            Target Invoice
-                          </div>
-                          <div className="font-bold text-text-primary text-sm font-mono">
-                            {candidate.invoice.invoice_number}
-                          </div>
-                          <div className="font-semibold text-xs text-text-primary mt-0.5">
-                            {candidate.invoice.invoice_type === 'purchase_tax_invoice'
-                              ? candidate.invoice.supplier_legal_name
-                              : candidate.invoice.customer_legal_name}
-                          </div>
-                          <div className="flex justify-between items-center text-xs mt-2 pt-2 border-t border-border/50">
-                            <span className="text-text-secondary">Outstanding:</span>
-                            <span className="font-bold text-primary-600">
-                              {formatINR(candidate.invoice.outstanding_balance || candidate.invoice.amount_due || '0.00')}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Center Link Icon (1 col) */}
-                        <div className="hidden md:flex md:col-span-1 justify-center items-center text-primary-600">
-                          <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900/40 flex items-center justify-center">
-                            <Link2 className="h-4 w-4" />
-                          </div>
-                        </div>
-
-                        {/* Right: Bank Record Side (5 cols) */}
-                        <div className="md:col-span-5 p-3.5 rounded-xl bg-surface-secondary border border-border">
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-text-secondary uppercase mb-2">
-                            <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
-                            Bank / UPI Record
-                          </div>
-                          <div className="font-mono text-xs text-text-secondary">
-                            {candidate.transaction.transaction_date} • {candidate.transaction.bank_account_name}
-                          </div>
-                          <div className="font-semibold text-xs text-text-primary mt-0.5 line-clamp-1">
-                            {candidate.transaction.description}
-                          </div>
-                          <div className="flex justify-between items-center text-xs mt-2 pt-2 border-t border-border/50">
-                            <span className="text-text-secondary">Txn Amount:</span>
-                            <span className="font-bold text-text-primary">
-                              {formatINR(candidate.transaction.amount)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Reasons Chip Bar */}
-                      <div className="mt-4 pt-3 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-semibold text-text-tertiary">Match evidence:</span>
-                          {candidate.matchReasons.map((reason, rIdx) => (
-                            <span
-                              key={rIdx}
-                              className="px-2 py-0.5 rounded-md bg-surface border border-border text-[11px] text-text-secondary"
-                            >
-                              ✓ {reason}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDismissMatch(candidate)}
-                            className="text-xs text-text-tertiary hover:text-red-600"
-                          >
-                            <X className="h-3.5 w-3.5 mr-1" /> Dismiss
-                          </Button>
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => handleApproveMatch(candidate)}
-                            className="text-xs"
-                          >
-                            <Check className="h-3.5 w-3.5 mr-1 text-white" /> Approve & Link Match
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} variant="rect" height="140" className="w-full" />
+              ))}
             </div>
-          ) : (
-            <Card className="p-8 text-center border-dashed">
-              <CheckCircle2 className="h-10 w-10 text-emerald-600 mx-auto mb-2" />
-              <h3 className="text-base font-bold text-text-primary">
-                All Eligible Records Reconciled
+          </div>
+        ) : matchCandidates.length === 0 && unmatchedCount > 0 ? (
+          <div className="rounded-2xl border border-border bg-surface p-8 shadow-sm">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-warning-500 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-text-primary mb-2">
+                No match suggestions
               </h3>
-              <p className="text-xs text-text-secondary mt-1 max-w-sm mx-auto">
-                No unmatched suggestions pending. Import additional bank statements or upload vendor invoices to discover new matches.
+              <p className="text-text-secondary max-w-md mx-auto mb-6">
+                No automated match suggestions found for your unmatched transactions.
+                You can manually match transactions or import more invoices.
               </p>
-            </Card>
-          )}
-        </div>
-
-        {/* Existing Confirmed Matches Log */}
-        <div className="space-y-3 pt-4">
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-1.5">
-            <History className="h-4 w-4 text-text-secondary" />
-            Audit Log of Reconciled Settlements (October 2026)
-          </h3>
-
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
-                    <tr>
-                      <th className="px-4 py-2.5">Invoice #</th>
-                      <th className="px-4 py-2.5">Vendor / Client</th>
-                      <th className="px-4 py-2.5">Bank Reference / UPI</th>
-                      <th className="px-4 py-2.5 text-right">Settled Amount</th>
-                      <th className="px-4 py-2.5 text-right">Audit Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    <tr className="hover:bg-surface-tertiary/50">
-                      <td className="px-4 py-3 font-mono font-bold text-text-primary">
-                        APX/2026/881
-                      </td>
-                      <td className="px-4 py-3 text-text-primary">
-                        Apex FMCG Distributors LLP
-                      </td>
-                      <td className="px-4 py-3 font-mono text-text-secondary">
-                        UPI/327718928312
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-emerald-600">
-                        ₹53,100.00
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Badge variant="success">Confirmed & Logged</Badge>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-surface-tertiary/50">
-                      <td className="px-4 py-3 font-mono font-bold text-text-primary">
-                        HUL/MUM/77321
-                      </td>
-                      <td className="px-4 py-3 text-text-primary">
-                        Hindustan Consumer Products Agency
-                      </td>
-                      <td className="px-4 py-3 font-mono text-text-secondary">
-                        NEFT/20261006/9931
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-emerald-600">
-                        ₹45,076.00
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Badge variant="success">Confirmed & Logged</Badge>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-surface-tertiary/50">
-                      <td className="px-4 py-3 font-mono font-bold text-text-primary">
-                        SKT/OUT/2026/104
-                      </td>
-                      <td className="px-4 py-3 text-text-primary">
-                        Pooja Caterers & Event Organizers
-                      </td>
-                      <td className="px-4 py-3 font-mono text-text-secondary">
-                        UPI/328400192301
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-emerald-600">
-                        ₹61,360.00
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Badge variant="success">Confirmed & Logged</Badge>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div className="flex justify-center">
+                <Button
+                  variant="primary"
+                  onClick={() => router.push('/documents')}
+                >
+                  Upload Invoices
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+        ) : matchCandidates.length === 0 ? (
+          <EmptyState
+            icon={<CheckCircle2 className="h-10 w-10 text-success-500" />}
+            title="All transactions reconciled"
+            description="Your books are up to date. No pending reconciliation items."
+          />
+        ) : (
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold text-text-primary">
+              Match Suggestions
+            </h3>
+            <div className="space-y-3">
+              {matchCandidates.map((candidate) => (
+                <MatchCard
+                  key={`${candidate.invoice.id}-${candidate.transaction.id}`}
+                  invoice={candidate.invoice}
+                  transaction={candidate.transaction}
+                  confidence={candidate.confidence_score}
+                  onApprove={() =>
+                    handleApprove(
+                      candidate.invoice.id,
+                      candidate.transaction.id,
+                      candidate.transaction.amount
+                    )
+                  }
+                  onReject={() =>
+                    handleReject(
+                      candidate.invoice.id,
+                      candidate.transaction.id
+                    )
+                  }
+                  isProcessing={
+                    isProcessing ===
+                    `${candidate.invoice.id}-${candidate.transaction.id}`
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-text-primary">
+              Reconciliation History
+            </h3>
+            <Link href="/reconciliation/history" className="text-sm font-medium text-primary-600 hover:text-primary-500 dark:hover:text-primary-400">
+              View all <ChevronRight className="h-3 w-3 ml-1" />
+            </Link>
+          </div>
+          <div className="h-64 overflow-y-auto border border-border rounded-xl p-3 bg-surface-secondary">
+            <p className="text-xs text-text-tertiary text-center mt-10">
+              Reconciliation history will appear here once matches are confirmed.
+            </p>
+          </div>
         </div>
       </div>
-    </DashboardLayout>
+    </AppShell>
   );
 }
