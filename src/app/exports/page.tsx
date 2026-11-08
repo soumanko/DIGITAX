@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/lib/theme-provider';
-import { formatINR } from '@/lib/decimal';
 import {
   Download,
   FileSpreadsheet,
@@ -16,6 +15,10 @@ import {
   ShieldCheck,
   AlertTriangle,
   ChevronRight,
+  File,
+  CreditCard,
+  Banknote,
+  RefreshCw,
 } from 'lucide-react';
 
 interface ExportCardProps {
@@ -56,6 +59,7 @@ function ExportCard({ title, description, icon, variant, onClick, period }: Expo
 export default function ExportsPage() {
   const { resolvedTheme } = useTheme();
   const [loading, setLoading] = useState(true);
+  [resolvedTheme];
 
   return (
     <AppShell>
@@ -66,14 +70,13 @@ export default function ExportsPage() {
           breadcrumbs={[{ label: 'Dashboard' }, { label: 'Exports' }]}
         />
 
-        {/* Info Banner */ }
         <div className="rounded-2xl border border-primary-200 dark:border-primary-800/50 bg-primary-50/60 dark:bg-primary-950/20 p-5">
           <div className="flex items-start gap-3">
             <ShieldCheck className="h-5 w-5 text-primary-600 dark:text-primary-400 shrink-0" />
             <div>
               <h3 className="text-sm font-bold text-text-primary">Export for Review, Not Filing</h3>
               <p className="text-xs text-text-secondary mt-1">
-                DIGITAX prepares summaries for <strong>human CA practitioner review</strong>. Exports are for bookkeeping purposes only — DIGITAX does not file returns directly to the GSTN portal.
+                DIGITAX prepares summaries for <strong>human CA practitioner review</strong>. Exports are for bookkeeping purposes only — DIGITAX does not file returns directly to the GST portal.
               </p>
             </div>
           </div>
@@ -142,4 +145,10 @@ export default function ExportsPage() {
       </div>
     </AppShell>
   );
+}
+
+function formatINR(amount: string | number): string {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(num)) return '₹0.00';
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

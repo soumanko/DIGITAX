@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AppShell } from '@/components/layout/app-shell';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/lib/theme-provider';
 import { escapeHtml } from '@/lib/security/xss-sanitizer';
 import { money } from '@/lib/decimal';
@@ -15,11 +14,9 @@ import {
   MessageSquare,
   Send,
   Sparkles,
-  ShieldCheck,
-  Clock,
-  AlertCircle,
   Copy,
   ChevronRight,
+  Bot,
 } from 'lucide-react';
 import { askGnaniEvon, GnaniMessage } from '@/lib/ai/gnani';
 
@@ -33,6 +30,57 @@ interface AssistantContext {
   currentPeriod: string;
   shopId: string;
   userId: string;
+}
+
+interface MessageBubbleProps {
+  message: GnaniMessage;
+  isUser: boolean;
+}
+
+function MessageBubble({ message, isUser }: MessageBubbleProps) {
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
+          isUser
+            ? 'bg-primary-600 text-white ml-auto'
+            : 'bg-surface border border-border text-text-primary'
+        }`}
+      >
+        <div className="flex items-start gap-2">
+          {!isUser && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <div className="h-5 w-5 rounded-full bg-gradient-primary flex items-center justify-center text-white shadow-sm shadow-primary-500/30">
+                <Sparkles className="h-2.5 w-2.5" />
+              </div>
+              <span className="text-xs font-medium text-primary-600 dark:text-primary-400">GNANI</span>
+            </div>
+          )}
+          <div className="prose prose-sm max-w-none">
+            {message.content.split('\n').map((line, i) => (
+              <p key={i} className="mb-2 last:mb-0">{escapeHtml(line)}</p>
+            ))}
+          </div>
+          {!isUser && (
+            <p className="text-[10px] text-text-tertiary mt-2 text-right">
+              AI-generated response • Verify against source records
+            </p>
+          )}
+          {isUser ? (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(message.content);
+              }}
+              className="ml-2 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-white/20"
+              title="Copy"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AssistantPage() {
@@ -49,6 +97,11 @@ export default function AssistantPage() {
   const [shopContext, setShopContext] = useState<AssistantContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  [resolvedTheme];
+
+  useEffect(() => {
+    loadShopContext();
+  }, []);
 
   async function loadShopContext() {
     try {
@@ -128,25 +181,6 @@ export default function AssistantPage() {
     'What is my Input Tax Credit for this month?',
   ];
 
-  if (loadingState()) {
-    return (
-      <AppShell>
-        <div className="flex flex-col items-center justify-center h-full">
-          <Skeleton variant="rect" width="full" height="4" className="w-1/2 mb-8" />
-          <div className="space-y-4 w-full max-w-md">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} variant="rect" height="80" className="w-full" />
-            ))}
-          </div>
-        </div>
-      </AppShell>
-    );
-  }
-
-  function loadingState() {
-    return !shopContext;
-  }
-
   return (
     <AppShell>
       <div className="flex flex-col h-full">
@@ -161,62 +195,20 @@ export default function AssistantPage() {
           }
         />
 
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {/* Chat Messages */ }
-          <div className="flex-1 overflow-y-auto p-6 bg-surface/50 dark:bg-surface-secondary/50">
+        <div className="flex-1 overflow-hidden flex flex-col relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary-50/30 dark:from-primary-900/10 via-surface to-surface pointer-events-none" />
+
+          <div className="flex-1 overflow-y-auto p-6 relative z-10">
             {messages.length === 0 ? (
               <EmptyState
-                icon={<MessageSquare className="h-12 w-12 text-text-tertiary" />}
+                icon={<Bot className="h-12 w-12 text-text-tertiary" />}
                 title="Start a conversation"
                 description="Ask GNANI about your GST, invoices, or bank reconciliation."
               />
             ) : (
               <div className="space-y-6" ref={messagesEndRef}>
                 {messages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
-                        msg.role === 'user'
-                          ? 'bg-primary-600 text-white ml-auto'
-                          : 'bg-surface border border-border text-text-primary'
-                      }`}
-                    >
-                      <div className="flex items-start gap-2">
-                        {msg.role === 'assistant' && (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <div className="h-5 w-5 rounded-full bg-gradient-primary flex items-center justify-center text-white shadow-sm">
-                              <Sparkles className="h-2.5 w-2.5" />
-                            </div>
-                            <span className="text-xs font-medium text-primary-600 dark:text-primary-400">GNANI</span>
-                          </div>
-                        )}
-                        <div className="prose prose-sm max-w-none">
-                          {msg.content.split('\n').map((line, i) => (
-                            <p key={i} className="mb-2 last:mb-0">{escapeHtml(line)}</p>
-                          ))}
-                        </div>
-                        {msg.role === 'user' ? (
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(msg.content);
-                            }}
-                            className="ml-2 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-white/20"
-                            title="Copy"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                        ) : null}
-                      </div>
-                      {msg.role === 'assistant' && (
-                        <p className="text-[10px] text-text-tertiary mt-2 text-right">
-                          AI-generated response • Verify against source records
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  <MessageBubble key={idx} message={msg} isUser={msg.role === 'user'} />
                 ))}
                 {isThinking && (
                   <div className="flex justify-start">
@@ -242,8 +234,7 @@ export default function AssistantPage() {
             )}
           </div>
 
-          {/* Input Area */ }
-          <div className="border-t border-border bg-surface p-4">
+          <div className="border-t border-border bg-surface p-4 relative z-10">
             <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
               <div className="flex gap-2">
                 <select
@@ -278,7 +269,6 @@ export default function AssistantPage() {
               )}
             </form>
 
-            {/* Suggested Questions */ }
             <div className="mt-4 flex flex-wrap gap-2">
               <p className="text-xs font-semibold text-text-tertiary uppercase mb-2 ml-1">Suggested questions</p>
               {suggestedQuestions.map((q, i) => (
@@ -302,4 +292,10 @@ export default function AssistantPage() {
       </div>
     </AppShell>
   );
+}
+
+function formatINR(amount: string | number): string {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(num)) return '₹0.00';
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

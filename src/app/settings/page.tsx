@@ -1,436 +1,367 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { AppShell } from '@/components/layout/app-shell';
-import { PageHeader } from '@/components/layout/page-header';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { useTheme } from '@/lib/theme-provider';
-import { escapeHtml } from '@/lib/security/xss-sanitizer';
-import { gstinSchema } from '@/lib/validation/schemas';
-import { Shop } from '@/types';
+import React from 'react';
+import Link from 'next/link';
 import {
-  Settings,
-  Store,
-  ShieldCheck,
-  CheckCircle2,
-  Globe2,
-  Key,
-  LogOut,
-  AlertCircle,
-  Save,
+  ArrowLeftRight,
+  BarChart3,
+  Bell,
+  Building2,
   ChevronRight,
+  ChevronsUpDown,
+  CircleHelp,
+  Landmark,
+  LayoutDashboard,
+  MoreHorizontal,
+  ReceiptText,
+  Search,
+  Users,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 
-interface SettingsTabProps {
-  key: string;
-  label: string;
-  icon: React.ElementType;
-}
-
-const SETTINGS_TABS: SettingsTabProps[] = [
-  { key: 'profile', label: 'Profile', icon: Settings },
-  { key: 'business', label: 'Business', icon: Store },
-  { key: 'security', label: 'Security', icon: ShieldCheck },
-  { key: 'language', label: 'Language', icon: Globe2 },
-];
-
-export default function SettingsPage() {
-  const router = useRouter();
-  const { toggleTheme, resolvedTheme, theme } = useTheme();
-  const [activeTab, setActiveTab] = useState<string>('profile');
-  const [shop, setShop] = useState<Shop | null>(null);
-  const [formData, setFormData] = useState({
-    shopName: '',
-    gstin: '',
-    businessType: '',
-    city: '',
-    scheme: 'regular',
-    language: 'en',
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSaving, setIsSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  async function loadShop() {
-    try {
-      const res = await fetch('/api/shops');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.shop) {
-          setShop(data.shop);
-          setFormData({
-            shopName: data.shop.name || '',
-            gstin: data.shop.gstin || '',
-            businessType: data.shop.business_type || '',
-            city: data.shop.city || '',
-            scheme: data.shop.taxpayer_scheme || 'regular',
-            language: data.shop.preferred_language || 'en',
-          });
-        }
-      }
-    } catch {
-      // Error handled silently
-    }
-  }
-
-  useEffect(() => {
-    const timer = setTimeout(() => loadShop(), 0);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleChange = (key: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
-    setErrors((prev) => ({ ...prev, [key]: '' }));
-  };
-
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    if (!formData.shopName.trim()) newErrors.shopName = 'Business name is required';
-    if (formData.gstin && !gstinSchema.safeParse(formData.gstin).success) {
-      newErrors.gstin = 'Invalid GSTIN format';
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-    setIsSaving(true);
-    setSaved(false);
-    try {
-      // In a real implementation, this would call an update API
-      // For now, we simulate a successful save
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch {
-      // Error handled silently
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
+export default function Settings() {
   return (
-    <AppShell>
-      <div className="max-w-3xl mx-auto space-y-6">
-        <PageHeader
-          title="Settings"
-          description="Manage your profile, business details, and security preferences."
-          breadcrumbs={[{ label: 'Dashboard' }, { label: 'Settings' }]}
-          action={
-            <ThemeSwitcherButton />
-          }
-        />
-
-        {/* Tabs */ }
-        <div className="flex gap-1 border-b border-border pb-2 mb-6">
-          {SETTINGS_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border-b-2 ${
-                activeTab === tab.key
-                  ? 'border-primary-600 text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20'
-                  : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-tertiary'
-              }`}
-            >
-              <tab.icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab Content */ }
-        {activeTab === 'profile' && (
-          <ProfileSettings formData={formData} handleChange={handleChange} errors={errors} />
-        )}
-        {activeTab === 'business' && (
-          <BusinessSettings
-            shop={shop}
-            formData={formData}
-            handleChange={handleChange}
-            errors={errors}
-            isSaving={isSaving}
-            saved={saved}
-            onSave={handleSave}
-          />
-        )}
-        {activeTab === 'security' && (
-          <SecuritySettings />
-        )}
-        {activeTab === 'language' && (
-          <LanguageSettings formData={formData} handleChange={handleChange} />
-        )}
-      </div>
-    </AppShell>
-  );
-}
-
-function ThemeSwitcherButton() {
-  return (
-    <button className="p-2 rounded-lg border border-border bg-surface text-text-secondary hover:text-text-primary hover:bg-surface-secondary transition-colors" aria-label="Switch theme">
-      <span className="sr-only">Theme switcher</span>
-      <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-      </svg>
-    </button>
-  );
-}
-
-interface ProfileSettingsProps {
-  formData: {
-    shopName: string;
-    gstin: string;
-    businessType: string;
-    city: string;
-    scheme: string;
-    language: string;
-  };
-  handleChange: (key: string, value: string) => void;
-  errors: Record<string, string>;
-}
-
-function ProfileSettings({ formData, handleChange, errors }: ProfileSettingsProps) {
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
-      <h3 className="text-lg font-bold text-text-primary mb-6">Profile Settings</h3>
-      <form onSubmit={(e) => e.preventDefault()}>
-        <div className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">Full Name</label>
-            <Input
-              value={formData.shopName}
-              onChange={(e) => handleChange('shopName', e.target.value)}
-              error={errors.shopName}
-              placeholder="Enter your full name"
-            />
-            {errors.shopName && <p className="text-xs text-error-600 mt-1">{errors.shopName}</p>}
+    <div data-appearance="light">
+      <div className="bg-background text-foreground w-full h-fit min-h-screen w-screen min-w-screen max-w-screen overflow-visible">
+        <aside className="bg-sidebar text-sidebar-foreground border-y border-r border-border flex fixed inset-y-0 left-0 px-4 py-5 flex-col w-64">
+          <div className="flex px-3 items-center h-8">
+            <span className="font-semibold text-foreground text-lg tracking-[0.18em]">
+              DIGITAX
+            </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-sm font-medium text-text-primary mb-2">Email</label>
-              <Input
-                value={formData.shopName && formData.shopName.includes('@') ? formData.shopName : ''}
-                onChange={(e) => handleChange('shopName', e.target.value)}
-                placeholder="email@example.com"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-primary mb-2">Phone</label>
-                <Input placeholder="+91 XXXXX XXXXX" />
-            </div>
-          </div>
-        </div>
-        <div className="mt-8 pt-6 border-t border-border">
-          <Button variant="primary" onClick={() => {}} disabled>
-            Save Profile
-          </Button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-interface BusinessSettingsProps {
-  shop: Shop | null;
-  formData: {
-    shopName: string;
-    gstin: string;
-    businessType: string;
-    city: string;
-    scheme: string;
-    language: string;
-  };
-  handleChange: (key: string, value: string) => void;
-  errors: Record<string, string>;
-  isSaving: boolean;
-  saved: boolean;
-  onSave: (e: React.FormEvent) => void;
-}
-
-function BusinessSettings({ shop, formData, handleChange, errors, isSaving, saved, onSave }: BusinessSettingsProps) {
-  async function loadShop() {
-    try {
-      const res = await fetch('/api/shops');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.shop) {
-          // Form data would be updated by parent
-        }
-      }
-    } catch {
-      // Error handled silently
-    }
-  }
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
-      <h3 className="text-lg font-bold text-text-primary mb-6">Business Details</h3>
-      <form onSubmit={onSave}>
-        <div className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">Business Name</label>
-            <Input
-              value={formData.shopName}
-              onChange={(e) => handleChange('shopName', e.target.value)}
-              error={errors.shopName}
-              placeholder="Enter business name"
-            />
-            {errors.shopName && <p className="text-xs text-error-600 mt-1">{errors.shopName}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">GSTIN</label>
-            <Input
-              value={formData.gstin}
-              onChange={(e) => handleChange('gstin', e.target.value)}
-              error={errors.gstin}
-              placeholder="27AABCS1429B1ZB"
-            />
-            {errors.gstin && <p className="text-xs text-error-600 mt-1">{errors.gstin}</p>}
-            <p className="text-xs text-text-tertiary mt-1">
-              15-character GSTIN with state code prefix
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-sm font-medium text-text-primary mb-2">Business Type</label>
-                <Input value={formData.businessType} onChange={(e) => handleChange('businessType', e.target.value)} placeholder="Retail, Trading, etc." />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-primary mb-2">City</label>
-                <Input value={formData.city} onChange={(e) => handleChange('city', e.target.value)} placeholder="Mumbai" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">Taxpayer Scheme</label>
-            <select
-              value={formData.scheme}
-              onChange={(e) => handleChange('scheme', e.target.value)}
-              className="bg-surface border border-border rounded-lg px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500 w-full"
-            >
-              <option value="regular">Regular Taxpayer</option>
-              <option value="composition_goods">Composition Scheme (Goods)</option>
-              <option value="composition_services">Composition Scheme (Services)</option>
-              <option value="qrmp">QRMP Scheme</option>
-            </select>
-          </div>
-        </div>
-        {saved && (
-          <div className="mb-4 p-3 rounded-lg bg-success-50 dark:bg-success-50/10 border border-success-200 dark:border-success-800/50">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-success-600 dark:text-success-400" />
-              <span className="text-sm text-success-700 dark:text-success-400">Business details saved successfully.</span>
-            </div>
-          </div>
-        )}
-        <div className="mt-8 pt-6 border-t border-border flex gap-3">
-          <Button variant="primary" type="submit" disabled={isSaving}>
-            {isSaving ? (
-              <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" /> Save Changes
-              </>
-            )}
-          </Button>
-          <Button variant="ghost" onClick={() => loadShop()}>Reset</Button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function SecuritySettings() {
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
-      <h3 className="text-lg font-bold text-text-primary mb-6">Security Settings</h3>
-      <div className="space-y-5">
-        <div className="p-4 rounded-xl border border-border bg-surface-secondary">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-semibold text-text-primary">Multi-Factor Authentication</h4>
-              <p className="text-xs text-text-secondary">Add an extra layer of security to your account</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" size="sm">Not Enabled</Badge>
-              <Button variant="ghost" size="sm">
-                Enable MFA <ChevronRight className="h-3 w-3 ml-1" />
-              </Button>
-            </div>
-          </div>
-        </div>
-        <div className="p-4 rounded-xl border border-border bg-surface-secondary">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-semibold text-text-primary">Session Management</h4>
-              <p className="text-xs text-text-secondary">View and manage active sessions</p>
-            </div>
-            <Button variant="ghost" size="sm">
-              View Sessions <ChevronRight className="h-3 w-3 ml-1" />
-            </Button>
-          </div>
-        </div>
-        <div className="p-4 rounded-xl border border-border bg-surface-secondary">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-semibold text-text-primary">Change Password</h4>
-              <p className="text-xs text-text-secondary">Update your account password</p>
-            </div>
-            <Button variant="ghost" size="sm">
-              Change Password <ChevronRight className="h-3 w-3 ml-1" />
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface LanguageSettingsProps {
-  formData: {
-    language: string;
-  };
-  handleChange: (key: string, value: string) => void;
-}
-
-function LanguageSettings({ formData, handleChange }: LanguageSettingsProps) {
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
-      <h3 className="text-lg font-bold text-text-primary mb-6">Language Preferences</h3>
-      <p className="text-sm text-text-secondary mb-6">
-        Choose your preferred language for the DIGITAX interface and AI assistant responses.
-      </p>
-      <div className="space-y-3">
-        {[
-          { value: 'en', label: 'English', native: 'English' },
-          { value: 'hi', label: 'Hindi', native: 'हिंदी' },
-          { value: 'bn', label: 'Bengali', native: 'বাংলা' },
-          { value: 'mr', label: 'Marathi', native: 'मराठी' },
-        ].map((lang) => (
-          <button
-            key={lang.value}
-            onClick={() => handleChange('language', lang.value)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
-              formData.language === lang.value
-                ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-700 text-primary-700 dark:text-primary-400'
-                : 'border-border bg-surface text-text-secondary hover:bg-surface-tertiary'
-            }`}
-          >
-            <div className="flex-1">
-              <div className="text-sm font-medium text-text-primary">{lang.label}</div>
-              <div className="text-xs text-text-tertiary">{lang.native}</div>
-            </div>
-            {formData.language === lang.value && (
-              <CheckCircle2 className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-            )}
+          <button className="text-left rounded-md bg-card text-foreground text-sm border border-border flex mt-6 px-3 justify-between items-center w-full h-11">
+            <span className="flex items-center gap-2 min-w-0">
+              <Building2 className="text-muted-foreground shrink-0 size-4" />
+              <span className="text-ellipsis whitespace-nowrap overflow-hidden">
+                Aster Labs Pvt. Ltd.
+              </span>
+            </span>
+            <ChevronsUpDown className="text-muted-foreground shrink-0 size-4" />
           </button>
-        ))}
+          <nav className="flex mt-7 flex-col flex-1 gap-1">
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/dashboard'}
+            >
+              <LayoutDashboard className="size-4" />
+              <span>Overview</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/transactions'}
+            >
+              <ArrowLeftRight className="size-4" />
+              <span>Transactions</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/gst'}
+            >
+              <ReceiptText className="size-4" />
+              <span>{`GST & Tax`}</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/banking'}
+            >
+              <Landmark className="size-4" />
+              <span>Banking</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/reports'}
+            >
+              <BarChart3 className="size-4" />
+              <span>Reports</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/contacts'}
+            >
+              <Users className="size-4" />
+              <span>Contacts</span>
+            </a>
+            <a
+              href="#"
+              className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center gap-3 h-10"
+            >
+              <svg className="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span>Settings</span>
+            </a>
+          </nav>
+          <div className="border-x border-t border-b flex pt-4 flex-col gap-2">
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <CircleHelp className="size-4" />
+              <span>{`Help & support`}</span>
+            </a>
+            <button className="text-left rounded-md flex px-3 py-2 items-center gap-3 hover:bg-accent active:bg-muted hover:active:bg-muted">
+              <span className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center shrink-0 size-8">
+                AK
+              </span>
+              <span className="min-w-0">
+                <span className="font-medium text-ellipsis whitespace-nowrap text-foreground text-sm block overflow-hidden">
+                  Ananya Kapoor
+                </span>
+                <span className="text-ellipsis whitespace-nowrap text-muted-foreground text-xs block overflow-hidden">
+                  Admin
+                </span>
+              </span>
+              <MoreHorizontal className="text-muted-foreground ml-auto shrink-0 size-4" />
+            </button>
+          </div>
+        </aside>
+        <div className="ml-64 min-h-screen">
+          <header className="bg-background border-t border-r border-b border-b-border border-l-border flex fixed z-10 top-0 right-0 left-64 px-8 justify-between items-center h-16">
+            <div className="text-sm flex items-center gap-2">
+              <span className="text-muted-foreground">DIGITAX</span>
+              <ChevronRight className="text-muted-foreground size-4" />
+              <span className="font-medium text-foreground">Settings</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="rounded-md bg-card border border-border flex px-3 items-center gap-2 w-64 h-9">
+                <Search className="text-muted-foreground size-4" />
+                <input
+                  type="search"
+                  placeholder="Search"
+                  defaultValue=""
+                  className="bg-transparent text-foreground text-sm outline-none w-full placeholder:text-muted-foreground"
+                />
+              </label>
+              <button
+                aria-label="Notifications"
+                className="rounded-md text-muted-foreground flex justify-center items-center size-9 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              >
+                <Bell className="size-4" />
+              </button>
+              <button
+                aria-label="Open profile"
+                className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center size-8"
+              >
+                AK
+              </button>
+            </div>
+          </header>
+          <main className="px-8 pt-24 pb-12">
+            <div className="max-w-6xl">
+              <div className="mb-8">
+                <h1 className="font-semibold text-foreground text-2xl tracking-tight">
+                  Settings
+                </h1>
+                <p className="text-muted-foreground text-sm mt-2">
+                  Control your workspace, team, and financial preferences.
+                </p>
+              </div>
+              <div className="grid items-start gap-8 grid-cols-[220px_minmax(0,1fr)]">
+                <Card className="rounded-lg">
+                  <CardContent className="flex p-2 flex-col gap-1">
+                    <a
+                      href="#"
+                      className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center h-10"
+                    >
+                      Workspace
+                    </a>
+                    <a
+                      href="#"
+                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                    >{`Team & permissions`}</a>
+                    <a
+                      href="#"
+                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                    >
+                      Notifications
+                    </a>
+                    <a
+                      href="#"
+                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                    >
+                      Integrations
+                    </a>
+                    <a
+                      href="#"
+                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                    >
+                      Billing
+                    </a>
+                  </CardContent>
+                </Card>
+                <div className="flex flex-col gap-6">
+                  <Card className="rounded-lg">
+                    <CardHeader>
+                      <CardTitle>Workspace details</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-6">
+                      <div className="grid gap-6 grid-cols-2">
+                        <div className="flex flex-col gap-2">
+                          <label
+                            htmlFor="business-name"
+                            className="font-medium text-sm"
+                          >
+                            Business name
+                          </label>
+                          <Input
+                            id="business-name"
+                            defaultValue="Aster Labs Pvt. Ltd."
+                            className="focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label
+                            htmlFor="legal-name"
+                            className="font-medium text-sm"
+                          >
+                            Legal name
+                          </label>
+                          <Input
+                            id="legal-name"
+                            defaultValue="Aster Labs Private Limited"
+                            className="focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label
+                            htmlFor="gstin"
+                            className="font-medium text-sm"
+                          >
+                            GSTIN
+                          </label>
+                          <Input
+                            id="gstin"
+                            defaultValue="27AABCU9603R1ZV"
+                            className="focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label htmlFor="pan" className="font-medium text-sm">
+                            PAN
+                          </label>
+                          <Input
+                            id="pan"
+                            defaultValue="AABCU9603R"
+                            className="focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2 col-span-2">
+                          <label
+                            htmlFor="registered-address"
+                            className="font-medium text-sm"
+                          >
+                            Registered address
+                          </label>
+                          <Input
+                            id="registered-address"
+                            defaultValue="Bandra Kurla Complex, Mumbai, Maharashtra 400051"
+                            className="focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                      </div>
+                      <div className="border-x border-t border-b flex pt-6 justify-end items-center gap-3">
+                        <Button variant="secondary">Discard</Button>
+                        <Button>Save changes</Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="rounded-lg">
+                    <CardHeader>
+                      <CardTitle>Financial preferences</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-6">
+                      <div className="grid gap-6 grid-cols-2">
+                        <div className="flex flex-col gap-2">
+                          <label className="font-medium text-sm">
+                            Financial year
+                          </label>
+                          <Select defaultValue="FY 2024–25">
+                            <SelectTrigger className="focus:ring-2 focus:ring-ring">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="FY 2024–25">
+                                FY 2024–25
+                              </SelectItem>
+                              <SelectItem value="FY 2023–24">
+                                FY 2023–24
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="font-medium text-sm">
+                            Base currency
+                          </label>
+                          <Select defaultValue="INR — Indian Rupee">
+                            <SelectTrigger className="focus:ring-2 focus:ring-ring">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="INR — Indian Rupee">
+                                INR — Indian Rupee
+                              </SelectItem>
+                              <SelectItem value="USD — US Dollar">
+                                USD — US Dollar
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="border-x border-t border-b flex pt-6 justify-between items-center">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium text-sm">
+                            Lock closed months
+                          </span>
+                          <span className="text-muted-foreground text-sm">
+                            Prevent edits to transactions in closed accounting
+                            months.
+                          </span>
+                        </div>
+                        <Switch defaultChecked={false} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="rounded-lg border-destructive/40">
+                    <CardHeader>
+                      <CardTitle>Danger zone</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex justify-between items-center gap-6">
+                      <p className="text-muted-foreground text-sm">
+                        Disconnecting your workspace removes bank sync access.
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        Disconnect workspace
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   );
 }
+

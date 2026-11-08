@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
-import { ShieldCheck, Mail, Lock, User, AlertCircle, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, User, AlertCircle } from 'lucide-react';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -67,7 +67,7 @@ function RegisterForm() {
   };
 
   return (
-    <Card className="border border-border bg-surface shadow-sm">
+    <Card className="border border-border bg-surface shadow-sm max-w-md">
       <CardContent className="pt-6 pb-4">
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-error-50 dark:bg-error-50/20 border border-error-200 dark:border-error-800 text-xs text-error-700 dark:text-error-400 flex items-start gap-2">
@@ -146,12 +146,12 @@ function RegisterForm() {
               >
                 {showPassword ? (
                   <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7h9.543c-.477.208-.948.422-1.425.825zM18 12a6 6 0 11-12 0 6 6 0 0112 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7h9.543c-.477.208-.948.422-1.425.825zM18 12a6 6 0 11-6-6 6 6 0 016 6z" />
                   </svg>
                 ) : (
                   <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.543 7h-1.21c-.599-.422-1.529-.713-2.459-.813zM15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.543 7h9.543c-.477.208-.948.422-1.425.825zM18 12a6 6 0 11-6-6 6 6 0 016-6 6 6 0 016-6z" />
                   </svg>
                 )}
               </button>

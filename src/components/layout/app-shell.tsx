@@ -53,6 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen flex-col lg:flex-row overflow-hidden">
+      {/* Sidebar */}
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-30 w-64 border-r border-border bg-surface flex flex-col transition-transform duration-300',
@@ -60,6 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
+        {/* Sidebar header */}
         <div className="flex h-14 items-center gap-2 border-b border-border px-4 shrink-0">
           <button
             onClick={() => setIsSidebarCollapsed((p) => !p)}
@@ -87,10 +89,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
+        {/* Business Selector */}
         <div className="px-4 py-4 border-b border-border shrink-0">
           <BusinessSelector className="w-full" />
         </div>
 
+        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 px-2">
           <ul className="space-y-1">
             {navigation.map((item) => {
@@ -101,7 +105,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     href={item.href}
                     onClick={() => setIsMobileOpen(false)}
                     className={cn(
-                      'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                      'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
                       isActive
                         ? 'bg-primary-50/60 dark:bg-primary-900/20 border-r-2 border-primary-500 text-primary-600 dark:text-primary-400'
                         : 'text-text-secondary hover:text-text-primary hover:bg-surface-tertiary'
@@ -124,6 +128,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </ul>
         </nav>
 
+        {/* Sidebar Footer */}
         <div className="border-t border-border p-3 shrink-0">
           <form action="/api/auth/signout" method="POST" className="w-full">
             <Button
@@ -152,7 +157,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
+      {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
+        {/* Top Navigation */}
         <header
           className="sticky top-0 z-20 border-b border-border bg-surface/90 backdrop-blur-md"
         >
@@ -184,6 +191,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        {/* Page Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           {children}
         </div>

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
-import { Mail, Lock, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function ResetPasswordPage() {
   const [step, setStep] = useState<'email' | 'confirm'>('email');
@@ -77,7 +77,7 @@ export default function ResetPasswordPage() {
               Reset your password
             </h2>
             <p className="text-sm text-text-secondary mb-6">
-              Enter your email address and we&apos;ll send you a link to reset your password.
+              Enter your email address and we&rsquo;ll send you a link to reset your password.
             </p>
 
             <Card className="mx-auto border border-border bg-surface shadow-sm">
@@ -176,32 +176,12 @@ export default function ResetPasswordPage() {
         )}
 
         <p className="mt-6 text-xs text-text-secondary">
-          Didn&apos;t receive an email? Check your spam folder or{' '}
+          Didn&rsquo;t receive an email? Check your spam folder or{' '}
           <Link href="/login" className="font-semibold text-primary-600 hover:text-primary-500 dark:hover:text-primary-400">
             try signing in
           </Link>
         </p>
       </div>
     </div>
-  );
-}
-
-function CheckCircle(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
-    </svg>
   );
 }

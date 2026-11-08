@@ -1,107 +1,356 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React from 'react';
 import { useRouter } from 'next/navigation';
-import { AppShell } from '@/components/layout/app-shell';
-import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState } from '@/components/ui/empty-state';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { useTheme } from '@/lib/theme-provider';
-import { escapeHtml } from '@/lib/security/xss-sanitizer';
-import { formatINR } from '@/lib/decimal';
-import { Invoice, Transaction } from '@/types';
 import {
-  Link2,
-  CheckCircle2,
-  ArrowRight,
-  X,
   AlertCircle,
-  HelpCircle,
-  FileText,
-  CreditCard,
-  Layers,
-  History,
+  ArrowLeftRight,
+  BarChart3,
+  Bell,
+  Building2,
+  CheckCircle2,
   ChevronRight,
-  Clock,
+  ChevronsUpDown,
+  CircleHelp,
+  Landmark,
+  LayoutDashboard,
+  MoreHorizontal,
+  ReceiptText,
+  Search,
+  Settings,
+  Users,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
-function MatchCard({
-  invoice,
-  transaction,
-  confidence,
-  onApprove,
-  onReject,
-  isProcessing,
-}: {
-  invoice: Invoice;
-  transaction: Transaction;
-  confidence: number | null;
-  onApprove: () => void;
-  onReject: () => void;
-  isProcessing: boolean;
-}) {
+export default function Reconciliation() {
+  const router = useRouter();
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold text-text-primary">{escapeHtml(invoice.invoice_number)}</h3>
-            <Badge variant="outline" size="sm">
-              {invoice.invoice_type === 'sales_tax_invoice' ? 'Sales' : 'Purchase'}
-            </Badge>
-          </div>
-          <div className="space-y-1 text-sm">
-            <p className="text-text-primary">
-              {escapeHtml(invoice.buyer_name || invoice.supplier_name || invoice.customer_trade_name || '—')}
-            </p>
-            <p className="text-text-tertiary">
-              {invoice.invoice_date || '—'} • {formatINR(invoice.total_amount)}
-            </p>
-          </div>
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold text-text-primary">
-              {escapeHtml(transaction.description || 'Bank Transaction')}
-            </h3>
-            <Badge variant={transaction.direction === 'credit' ? 'success' : 'error'} size="sm">
-              {transaction.direction === 'credit' ? 'Credit' : 'Debit'}
-            </Badge>
-          </div>
-          <div className="space-y-1 text-sm">
-            <p className="text-text-primary">
-              {transaction.transaction_date || '—'} • {escapeHtml(transaction.reference_number || '—')}
-            </p>
-            <p className="text-text-tertiary">
-              {transaction.direction === 'credit' ? '+' : '−'}{formatINR(transaction.amount)}
-            </p>
-          </div>
-        </div>
-        <div className="flex-1 flex items-center justify-end">
-          <div className="text-right">
-            <p className="text-sm font-bold text-text-primary">
-              {confidence !== null ? `${Math.round(confidence * 100)}%` : '—'} match
-            </p>
-            <p className="text-xs text-text-tertiary">Confidence</p>
-          </div>
-          <div className="flex gap-2 mt-2 md:mt-0">
-            <button
-              onClick={onApprove}
-              disabled={isProcessing}
-              className="px-3 py-1.5 rounded-lg bg-success-600 text-white text-sm font-medium hover:bg-success-700 disabled:opacity-60 transition-colors flex items-center gap-1.5"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" /> Confirm
+    <div data-appearance="light">
+      <div className="bg-background text-foreground w-full h-fit min-h-screen w-screen min-w-screen max-w-screen overflow-visible">
+        <div className="bg-background text-foreground min-h-screen">
+          <aside className="bg-sidebar text-sidebar-foreground border-y border-r border-border flex fixed inset-y-0 left-0 px-4 py-5 flex-col w-64">
+            <div className="flex px-3 items-center h-8">
+              <span className="font-semibold text-foreground text-lg tracking-[0.18em]">
+                DIGITAX
+              </span>
+            </div>
+            <button className="text-left rounded-md bg-card text-foreground text-sm border border-border flex mt-6 px-3 justify-between items-center w-full h-11">
+              <span className="flex items-center gap-2 min-w-0">
+                <Building2 className="text-muted-foreground shrink-0 size-4" />
+                <span className="text-ellipsis whitespace-nowrap overflow-hidden">
+                  Aster Labs Pvt. Ltd.
+                </span>
+              </span>
+              <ChevronsUpDown className="text-muted-foreground shrink-0 size-4" />
             </button>
-            <button
-              onClick={onReject}
-              disabled={isProcessing}
-              className="px-3 py-1.5 rounded-lg bg-error-600 text-white text-sm font-medium hover:bg-error-700 disabled:opacity-60 transition-colors flex items-center gap-1.5"
-            >
-              <X className="h-3.5 w-3.5" /> Reject
-            </button>
+            <nav className="flex mt-7 flex-col flex-1 gap-1">
+              <a
+                href="#"
+                className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                onClick={() => router.push('/dashboard')}
+              >
+                <LayoutDashboard className="size-4" />
+                <span>Overview</span>
+              </a>
+              <a
+                href="#"
+                className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                onClick={() => router.push('/transactions')}
+              >
+                <ArrowLeftRight className="size-4" />
+                <span>Transactions</span>
+              </a>
+              <a
+                href="#"
+                className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                onClick={() => router.push('/gst')}
+              >
+                <ReceiptText className="size-4" />
+                <span>{`GST & Tax`}</span>
+              </a>
+              <a
+                href="#"
+                className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center gap-3 h-10"
+              >
+                <Landmark className="size-4" />
+                <span>Banking</span>
+              </a>
+              <a
+                href="#"
+                className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                onClick={() => router.push('/reports')}
+              >
+                <BarChart3 className="size-4" />
+                <span>Reports</span>
+              </a>
+              <a
+                href="#"
+                className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                onClick={() => router.push('/contacts')}
+              >
+                <Users className="size-4" />
+                <span>Contacts</span>
+              </a>
+              <a
+                href="#"
+                className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                onClick={() => router.push('/settings')}
+              >
+                <Settings className="size-4" />
+                <span>Settings</span>
+              </a>
+            </nav>
+            <div className="border-x border-t border-b flex pt-4 flex-col gap-2">
+              <a
+                href="#"
+                className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              >
+                <CircleHelp className="size-4" />
+                <span>{`Help & support`}</span>
+              </a>
+              <button className="text-left rounded-md flex px-3 py-2 items-center gap-3 hover:bg-accent active:bg-muted hover:active:bg-muted">
+                <span className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center shrink-0 size-8">
+                  AK
+                </span>
+                <span className="min-w-0">
+                  <span className="font-medium text-ellipsis whitespace-nowrap text-foreground text-sm block overflow-hidden">
+                    Ananya Kapoor
+                  </span>
+                  <span className="text-ellipsis whitespace-nowrap text-muted-foreground text-xs block overflow-hidden">
+                    Admin
+                  </span>
+                </span>
+                <MoreHorizontal className="text-muted-foreground ml-auto shrink-0 size-4" />
+              </button>
+            </div>
+          </aside>
+          <div className="ml-64 min-h-screen">
+            <header className="bg-background border-t border-r border-b border-b-border border-l-border flex fixed z-10 top-0 right-0 left-64 px-8 justify-between items-center h-16">
+              <div className="text-sm flex items-center gap-2">
+                <span className="text-muted-foreground">DIGITAX</span>
+                <ChevronRight className="text-muted-foreground size-4" />
+                <span className="text-muted-foreground">Banking</span>
+                <ChevronRight className="text-muted-foreground size-4" />
+                <span className="font-medium text-foreground">
+                  Reconciliation
+                </span>
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="rounded-md bg-card border border-border flex px-3 items-center gap-2 w-64 h-9">
+                  <Search className="text-muted-foreground size-4" />
+                  <input
+                    type="search"
+                    placeholder="Search"
+                    className="bg-transparent text-foreground text-sm outline-none w-full placeholder:text-muted-foreground"
+                  />
+                </label>
+                <button
+                  aria-label="Notifications"
+                  className="rounded-md text-muted-foreground flex justify-center items-center size-9 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                >
+                  <Bell className="size-4" />
+                </button>
+                <button
+                  aria-label="Open profile"
+                  className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center size-8"
+                >
+                  AK
+                </button>
+              </div>
+            </header>
+            <main className="px-8 pt-24 pb-8">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h1 className="font-semibold text-2xl tracking-tight">
+                    Reconciliation
+                  </h1>
+                  <p className="text-muted-foreground text-sm mt-1">
+                    Match your books to the bank statement.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Select value="ICICI Current Account">
+                    <SelectTrigger className="w-56">
+                      <SelectValue placeholder="Select Account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ICICI Current Account">
+                        ICICI Current Account
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value="June 2024">
+                    <SelectTrigger className="w-36">
+                      <SelectValue placeholder="Select date" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="June 2024">June 2024</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={() => router.push('/banking')}>
+                    Finish review
+                  </Button>
+                </div>
+              </div>
+              <div className="rounded-md bg-primary/10 text-primary text-sm border border-primary/30 hidden mt-6 px-4 py-3 items-center gap-3">
+                <CheckCircle2 className="size-4" />
+                <span>Transaction matched successfully.</span>
+              </div>
+              <div className="grid mt-8 gap-6 grid-cols-5">
+                <Card className="col-span-2 overflow-hidden">
+                  <div className="border-t border-r border-b border-b-border border-l-border px-5 py-4">
+                    <h2 className="font-medium">12 transactions need review</h2>
+                  </div>
+                  <div className="flex flex-col">
+                    <button className="text-left border-t border-r border-b border-b-border border-l-border flex px-5 py-4 flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-sm">AWS India</span>
+                        <span className="font-medium text-sm">-₹42,180</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground text-xs">
+                          23 Jun 2024
+                        </span>
+                        <span className="rounded-sm bg-muted text-muted-foreground text-xs px-2 py-0.5">
+                          Needs review
+                        </span>
+                      </div>
+                    </button>
+                    <button className="text-left border-t border-r border-b border-b-border border-l-border flex px-5 py-4 flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-sm">
+                          WeWork India
+                        </span>
+                        <span className="font-medium text-sm">-₹14,220</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground text-xs">
+                          21 Jun 2024
+                        </span>
+                        <span className="rounded-sm bg-muted text-muted-foreground text-xs px-2 py-0.5">
+                          Needs review
+                        </span>
+                      </div>
+                    </button>
+                    <button className="text-left border-t border-r border-b border-b-border border-l-border flex px-5 py-4 flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-sm">
+                          Bank charges
+                        </span>
+                        <span className="font-medium text-sm">-₹1,180</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground text-xs">
+                          18 Jun 2024
+                        </span>
+                        <span className="rounded-sm bg-muted text-muted-foreground text-xs px-2 py-0.5">
+                          Needs review
+                        </span>
+                      </div>
+                    </button>
+                    <button className="text-left flex px-5 py-4 flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-sm">UPI refund</span>
+                        <span className="font-medium text-sm">-₹12,300</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground text-xs">
+                          14 Jun 2024
+                        </span>
+                        <span className="rounded-sm bg-muted text-muted-foreground text-xs px-2 py-0.5">
+                          Needs review
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                </Card>
+                <Card className="p-6 col-span-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h2 className="font-semibold text-lg">AWS India</h2>
+                      <p className="font-semibold text-2xl mt-1">-₹42,180</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-muted-foreground text-xs">Bank date</p>
+                      <p className="font-medium text-sm mt-1">23 Jun 2024</p>
+                    </div>
+                  </div>
+                  <div className="mt-8">
+                    <h3 className="font-medium text-sm">Suggested match</h3>
+                    <div className="rounded-md bg-muted/40 border border-border mt-3 p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium text-sm">{`Software & subscriptions`}</p>
+                          <p className="text-muted-foreground text-xs mt-1">
+                            Invoice EXP-2024-0062
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium text-sm">-₹42,180</p>
+                          <p className="text-primary text-xs mt-1">
+                            98% confidence
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex mt-4 gap-3">
+                      <Button>Match transaction</Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => router.push('/expense-capture')}
+                      >
+                        Create new expense
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="border-x border-t border-b mt-8 pt-6">
+                    <h3 className="font-medium text-sm">Split or categorize</h3>
+                    <div className="grid mt-4 gap-4 grid-cols-2">
+                      <label className="text-sm flex flex-col gap-2">
+                        <span className="text-muted-foreground">Category</span>
+                        <Select defaultValue="Software & subscriptions">
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Software & subscriptions">{`Software & subscriptions`}</SelectItem>
+                            <SelectItem value="Office expenses">
+                              Office expenses
+                            </SelectItem>
+                            <SelectItem value="Travel">Travel</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </label>
+                      <label className="text-sm flex flex-col gap-2">
+                        <span className="text-muted-foreground">Memo</span>
+                        <input
+                          defaultValue="Cloud hosting — June"
+                          className="ring-offset-background rounded-md bg-background text-sm border border-input outline-none px-3 h-10 placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                      </label>
+                    </div>
+                    <label className="text-sm flex mt-4 items-center gap-2">
+                      <Checkbox defaultChecked={false} />
+                      <span>Exclude from GST</span>
+                    </label>
+                  </div>
+                </Card>
+              </div>
+              <div className="rounded-md bg-muted text-muted-foreground text-sm border border-border flex mt-6 px-4 py-3 items-center gap-3">
+                <AlertCircle className="size-4" />
+                <span>4 transactions have incomplete GST data</span>
+              </div>
+            </main>
           </div>
         </div>
       </div>
@@ -109,222 +358,3 @@ function MatchCard({
   );
 }
 
-export default function ReconciliationPage() {
-  const { resolvedTheme } = useTheme();
-  const router = useRouter();
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [confirmedMatches, setConfirmedMatches] = useState<string[]>([]);
-  const [rejectedMatches, setRejectedMatches] = useState<string[]>([]);
-  const [isProcessing, setIsProcessing] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  [resolvedTheme];
-
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [invRes, txnRes] = await Promise.all([
-        fetch('/api/invoices'),
-        fetch('/api/transactions'),
-      ]);
-      if (invRes.ok) {
-        const invData = await invRes.json();
-        setInvoices(invData.invoices || []);
-      }
-      if (txnRes.ok) {
-        const txnData = await txnRes.json();
-        setTransactions(txnData.transactions || []);
-      }
-    } catch {
-      // Error handled by empty state
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    const timer = setTimeout(() => loadData(), 0);
-    return () => clearTimeout(timer);
-  }, []);
-
-  async function handleApprove(
-    invoiceId: string,
-    transactionId: string,
-    allocatedAmount: string
-  ) {
-    const matchKey = `${invoiceId}-${transactionId}`;
-    setIsProcessing(matchKey);
-    try {
-      const res = await fetch('/api/reconciliation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transaction_id: transactionId,
-          invoice_id: invoiceId,
-          allocated_amount: allocatedAmount,
-        }),
-      });
-      if (res.ok) {
-        setConfirmedMatches((prev) => [...prev, matchKey]);
-        loadData();
-      }
-    } catch {
-      // Error handled silently
-    } finally {
-      setIsProcessing(null);
-    }
-  }
-
-  async function handleReject(invoiceId: string, transactionId: string) {
-    const matchKey = `${invoiceId}-${transactionId}`;
-    setRejectedMatches((prev) => [...prev, matchKey]);
-  }
-
-  const matchCandidates: Array<{
-    invoice: Invoice;
-    transaction: Transaction;
-    confidence_score: number | null;
-  }> = [];
-
-  const matchedCount = confirmedMatches.length;
-  const unmatchedCount = transactions.filter(
-    (t) => t.reconciliation_status !== 'matched'
-  ).length;
-
-  return (
-    <AppShell>
-      <div className="space-y-6">
-        <PageHeader
-          title="Bank Reconciliation"
-          description="Match your bank transactions with invoices to keep your books accurate."
-          breadcrumbs={[{ label: 'Dashboard' }, { label: 'Reconciliation' }]}
-        />
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-xs font-semibold text-text-tertiary uppercase">
-              Matched
-            </p>
-            <p className="text-xl font-bold text-success-600 dark:text-success-400 font-mono mt-1">
-              {matchedCount}
-            </p>
-            <p className="text-xs text-text-secondary mt-1">
-              transactions reconciled
-            </p>
-          </div>
-          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-xs font-semibold text-text-tertiary uppercase">
-              Unmatched
-            </p>
-            <p className="text-xl font-bold text-warning-600 dark:text-warning-400 font-mono mt-1">
-              {unmatchedCount}
-            </p>
-            <p className="text-xs text-text-secondary mt-1">
-              awaiting reconciliation
-            </p>
-          </div>
-          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-xs font-semibold text-text-tertiary uppercase">
-              Match Rate
-            </p>
-            <p className="text-xl font-bold text-text-primary font-mono mt-1">
-              {transactions.length > 0
-                ? Math.round((matchedCount / transactions.length) * 100)
-                : 0}%
-            </p>
-            <p className="text-xs text-text-secondary mt-1">
-              of transactions matched
-            </p>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="p-8">
-            <Skeleton variant="rect" width="full" height="4" className="mb-6" />
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} variant="rect" height="140" className="w-full" />
-              ))}
-            </div>
-          </div>
-        ) : matchCandidates.length === 0 && unmatchedCount > 0 ? (
-          <div className="rounded-2xl border border-border bg-surface p-8 shadow-sm">
-            <div className="text-center">
-              <AlertCircle className="h-12 w-12 text-warning-500 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-text-primary mb-2">
-                No match suggestions
-              </h3>
-              <p className="text-text-secondary max-w-md mx-auto mb-6">
-                No automated match suggestions found for your unmatched transactions.
-                You can manually match transactions or import more invoices.
-              </p>
-              <div className="flex justify-center">
-                <Button
-                  variant="primary"
-                  onClick={() => router.push('/documents')}
-                >
-                  Upload Invoices
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : matchCandidates.length === 0 ? (
-          <EmptyState
-            icon={<CheckCircle2 className="h-10 w-10 text-success-500" />}
-            title="All transactions reconciled"
-            description="Your books are up to date. No pending reconciliation items."
-          />
-        ) : (
-          <div className="space-y-4">
-            <h3 className="text-lg font-bold text-text-primary">
-              Match Suggestions
-            </h3>
-            <div className="space-y-3">
-              {matchCandidates.map((candidate) => (
-                <MatchCard
-                  key={`${candidate.invoice.id}-${candidate.transaction.id}`}
-                  invoice={candidate.invoice}
-                  transaction={candidate.transaction}
-                  confidence={candidate.confidence_score}
-                  onApprove={() =>
-                    handleApprove(
-                      candidate.invoice.id,
-                      candidate.transaction.id,
-                      candidate.transaction.amount
-                    )
-                  }
-                  onReject={() =>
-                    handleReject(
-                      candidate.invoice.id,
-                      candidate.transaction.id
-                    )
-                  }
-                  isProcessing={
-                    isProcessing ===
-                    `${candidate.invoice.id}-${candidate.transaction.id}`
-                  }
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-text-primary">
-              Reconciliation History
-            </h3>
-            <Link href="/reconciliation/history" className="text-sm font-medium text-primary-600 hover:text-primary-500 dark:hover:text-primary-400">
-              View all <ChevronRight className="h-3 w-3 ml-1" />
-            </Link>
-          </div>
-          <div className="h-64 overflow-y-auto border border-border rounded-xl p-3 bg-surface-secondary">
-            <p className="text-xs text-text-tertiary text-center mt-10">
-              Reconciliation history will appear here once matches are confirmed.
-            </p>
-          </div>
-        </div>
-      </div>
-    </AppShell>
-  );
-}

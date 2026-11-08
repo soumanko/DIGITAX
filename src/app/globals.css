@@ -2,35 +2,66 @@
 
 /* ============================================
    DIGITAX Design System
-   A calm, professional, trustworthy visual identity
-   for Indian small-business financial software.
+   Premium Enterprise Fintech
    ============================================ */
 
 @theme {
-  /* Core palette — deep indigo + warm accents */
-  --color-primary-50: #eef2ff;
-  --color-primary-100: #e0e7ff;
-  --color-primary-200: #c7d2fe;
-  --color-primary-300: #a5b4fc;
-  --color-primary-400: #818cf8;
-  --color-primary-500: #6366f1;
-  --color-primary-600: #4f46e5;
-  --color-primary-700: #4338ca;
-  --color-primary-800: #3730a3;
-  --color-primary-900: #312e81;
-  --color-primary-950: #1e1b4b;
+  /* ===== Flowstep Design Tokens — Light Theme ===== */
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+  --color-sidebar: #f8fafc;
+  --color-sidebar-foreground: #1e293b;
+  --color-border: #e2e8f0;
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+  --color-primary: #2563eb;
+  --color-primary-foreground: #ffffff;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-accent: #14b8a6;
+  --color-accent-foreground: #ffffff;
+  --color-ring: #2563eb;
+  --color-input: #e2e8f0;
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #0f172a;
+  --color-success: #22c55e;
+  --color-success-foreground: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-foreground: #ffffff;
+  --color-error: #dc2626;
+  --color-error-foreground: #ffffff;
+  --color-chart-1: #2563eb;
+  --color-chart-2: #14b8a6;
+  --color-chart-3: #3b82f6;
+  --color-chart-4: #f59e0b;
+  --color-chart-5: #84cc16;
 
-  /* Warm accent for CTAs and highlights */
-  --color-accent-50: #fff7ed;
-  --color-accent-100: #ffedd5;
-  --color-accent-200: #fed7aa;
-  --color-accent-300: #fdba74;
-  --color-accent-400: #fb923c;
-  --color-accent-500: #f97316;
-  --color-accent-600: #ea580c;
-  --color-accent-700: #c2410c;
-  --color-accent-800: #9a3412;
-  --color-accent-900: #7c2d12;
+  /* ===== Light Theme ===== */
+  --color-primary-50: #f0f9ff;
+  --color-primary-100: #e0f2fe;
+  --color-primary-200: #bae6fd;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+  --color-primary-950: #172554;
+
+  /* Accent: Electric Teal */
+  --color-accent-50: #f0fdfa;
+  --color-accent-100: #ccfbf1;
+  --color-accent-200: #99f6e4;
+  --color-accent-300: #5eead4;
+  --color-accent-400: #2dd4bf;
+  --color-accent-500: #14b8a6;
+  --color-accent-600: #0d9488;
+  --color-accent-700: #0f766e;
+  --color-accent-800: #115e59;
+  --color-accent-900: #134e4a;
 
   /* Success / Confirmed */
   --color-success-50: #f0fdf4;
@@ -50,7 +81,7 @@
   --color-error-600: #dc2626;
   --color-error-700: #b91c1c;
 
-  /* Neutrals */
+  /* Neutrals — Light */
   --color-surface: #ffffff;
   --color-surface-secondary: #f8fafc;
   --color-surface-tertiary: #f1f5f9;
@@ -78,10 +109,47 @@
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
   --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ===== Dark Theme ===== */
 .dark {
+  /* ===== Flowstep Design Tokens — Dark Theme ===== */
+  --color-background: #0a0f1a;
+  --color-foreground: #f8fafc;
+  --color-sidebar: #0f172a;
+  --color-sidebar-foreground: #cbd5e1;
+  --color-border: #334155;
+  --color-card: #0f172a;
+  --color-card-foreground: #f8fafc;
+  --color-primary: #6366f1;
+  --color-primary-foreground: #ffffff;
+  --color-muted: #1e293b;
+  --color-muted-foreground: #94a3b8;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-accent: #2dd4bf;
+  --color-accent-foreground: #0a0f1a;
+  --color-ring: #818cf8;
+  --color-input: #334155;
+  --color-secondary: #1e293b;
+  --color-secondary-foreground: #f8fafc;
+  --color-success: #4ade80;
+  --color-success-foreground: #0a0f1a;
+  --color-warning: #fbbf24;
+  --color-warning-foreground: #0a0f1a;
+  --color-error: #f87171;
+  --color-error-foreground: #0a0f1a;
+  --color-chart-1: #6366f1;
+  --color-chart-2: #2dd4bf;
+  --color-chart-3: #818cf8;
+  --color-chart-4: #fbbf24;
+  --color-chart-5: #a3e635;
+
   /* Core palette — midnight navy + electric teal */
   --color-primary-50: #1e1b4b;
   --color-primary-100: #312e81;
@@ -125,7 +193,7 @@
   --color-error-600: #fca5a5;
   --color-error-700: #fecaca;
 
-  /* Neutrals — dark surfaces */
+  /* Neutrals — Dark */
   --color-surface: #0a0f1a;
   --color-surface-secondary: #111827;
   --color-surface-tertiary: #1f2937;
@@ -137,7 +205,7 @@
   --color-text-inverse: #0a0f1a;
 }
 
-/* Typography and other non-color tokens are shared across themes */
+/* Typography and non-color tokens shared across themes */
 
 /* ============================================
    Base Styles
@@ -162,9 +230,7 @@ body {
   border-radius: var(--radius-sm);
 }
 
-/* ============================================
-   Review State Indicators
-   ============================================ */
+/* Review State Indicators */
 .review-state-pending_review {
   --state-color: var(--color-warning-500);
   --state-bg: var(--color-warning-50);
@@ -190,9 +256,7 @@ body {
   --state-bg: var(--color-accent-50);
 }
 
-/* ============================================
-   Animations
-   ============================================ */
+/* Animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -213,61 +277,78 @@ body {
   100% { background-position: 200% 0; }
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.animate-slide-in {
-  animation: slideIn 0.3s ease-out forwards;
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 
-.animate-pulse-soft {
-  animation: pulse-soft 2s ease-in-out infinite;
+.animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+.animate-slide-in { animation: slideIn 0.3s ease-out forwards; }
+.animate-slide-up { animation: slideUp 0.4s ease-out forwards; }
+.animate-scale-in { animation: scaleIn 0.2s ease-out forwards; }
+.animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+
+/* Gradients — used sparingly */
+.bg-gradient-primary {
+  background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-accent-600) 100%);
 }
 
+.bg-gradient-surface {
+  background: linear-gradient(180deg, var(--color-surface-secondary) 0%, var(--color-surface) 100%);
+}
+
+.bg-gradient-hero {
+  background: linear-gradient(135deg, #0a0f1a 0%, #111827 50%, #0a0f1a 100%);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-primary-400) 0%, var(--color-accent-400) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Skeleton */
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--color-surface-tertiary) 25%,
-    var(--color-surface-secondary) 50%,
-    var(--color-surface-tertiary) 75%
-  );
+  background: linear-gradient(90deg, var(--color-surface-tertiary) 25%, var(--color-surface-secondary) 50%, var(--color-surface-tertiary) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: var(--radius-md);
 }
 
-/* ============================================
-   Scrollbar Styling
-   ============================================ */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-border-strong);
+.skeleton-circle {
+  background: var(--color-surface-tertiary);
   border-radius: var(--radius-full);
+  animation: shimmer 1.5s ease-in-out infinite;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-tertiary);
+.skeleton-text {
+  height: 0.875rem;
+  border-radius: var(--radius-sm);
+  animation: shimmer 1.5s ease-in-out infinite;
 }
+.skeleton-text.w-75 { width: 75%; }
+.skeleton-text.w-50 { width: 50%; }
+.skeleton-text.w-30 { width: 30%; }
 
-/* ============================================
-   Print Styles
-   ============================================ */
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-tertiary); }
+
+/* Print */
 @media print {
-  .no-print {
-    display: none !important;
-  }
+  .no-print { display: none !important; }
+  body { color: #000; background: #fff; }
+}
 
-  body {
-    color: #000;
-    background: #fff;
-  }
+/* Theme transition class */
+.theme-transition {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }

@@ -1,276 +1,485 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { AppShell } from '@/components/layout/app-shell';
-import { PageHeader } from '@/components/layout/page-header';
-import { DataTable } from '@/components/ui/data-table';
-import { EmptyState } from '@/components/ui/empty-state';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { useTheme } from '@/lib/theme-provider';
-import { escapeHtml } from '@/lib/security/xss-sanitizer';
-import { formatINR } from '@/lib/decimal';
-import { Transaction } from '@/types';
+import React from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
+  ArrowDownToLine,
   ArrowLeftRight,
-  UploadCloud,
-  Search,
-  Filter,
-  FileSpreadsheet,
-  Plus,
-  Clock,
-  AlertCircle,
-  CheckCircle2,
+  ArrowUpFromLine,
+  BarChart3,
+  Bell,
+  Building2,
   ChevronRight,
+  ChevronsUpDown,
+  CircleHelp,
+  Landmark,
+  LayoutDashboard,
+  MoreHorizontal,
+  ReceiptText,
+  RotateCcw,
+  Search,
+  SearchX,
+  Settings,
+  SlidersHorizontal,
+  Users,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
-function DirectionBadge({ direction }: { direction: string }) {
-  const isCredit = direction === 'credit';
+export default function Transactions() {
+  const router = useRouter();
   return (
-    <Badge
-      variant={isCredit ? 'success' : 'error'}
-      size="sm"
-    >
-      {isCredit ? 'Credit (+)' : 'Debit (−)'}
-    </Badge>
-  );
-}
-
-function ReconciliationStatusBadge({ status }: { status: string }) {
-  const variants: Record<string, 'default' | 'success' | 'warning' | 'error' | 'accent'> = {
-    matched: 'success',
-    unmatched: 'warning',
-    partial: 'accent',
-  };
-  return (
-    <Badge variant={variants[status] || 'default'} size="sm">
-      {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-    </Badge>
-  );
-}
-
-export default function TransactionsPage() {
-  const { resolvedTheme } = useTheme();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'credit' | 'debit' | 'unmatched'>('all');
-  const [loading, setLoading] = useState(true);
-  const [showImportModal, setShowImportModal] = useState(false);
-
-  const typeOptions = [
-    { label: 'All Transactions', value: 'all' },
-    { label: 'Credits', value: 'credit' },
-    { label: 'Debits', value: 'debit' },
-    { label: 'Unmatched', value: 'unmatched' },
-  ];
-
-  async function loadTransactions() {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/transactions');
-      if (res.ok) {
-        const data = await res.json();
-        setTransactions(Array.isArray(data.transactions) ? data.transactions : []);
-      }
-    } catch {
-      // Error handled by empty state
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    const timer = setTimeout(() => loadTransactions(), 0);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const filteredTxns = transactions.filter((t) => {
-    const matchesSearch =
-      (t.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (t.reference_number || '').toLowerCase().includes(searchTerm.toLowerCase());
-    if (filterType === 'credit') return matchesSearch && t.direction === 'credit';
-    if (filterType === 'debit') return matchesSearch && t.direction === 'debit';
-    if (filterType === 'unmatched') return matchesSearch && t.reconciliation_status === 'unmatched';
-    return matchesSearch;
-  });
-
-  const totalCredits = filteredTxns
-    .filter((t) => t.direction === 'credit')
-    .reduce((acc, t) => acc + parseFloat(t.amount || '0'), 0);
-  const totalDebits = filteredTxns
-    .filter((t) => t.direction === 'debit')
-    .reduce((acc, t) => acc + parseFloat(t.amount || '0'), 0);
-
-  return (
-    <AppShell>
-      <div className="space-y-6">
-        <PageHeader
-          title="Bank Transactions"
-          description="View, import, and reconcile your bank and UPI transactions."
-          breadcrumbs={[{ label: 'Dashboard' }, { label: 'Transactions' }]}
-          action={
-            <Button variant="primary" onClick={() => setShowImportModal(true)}>
-              <UploadCloud className="h-3.5 w-3.5 mr-1.5" /> Import Statement
-            </Button>
-          }
-        />
-
-        {/* Summary Strip */ }
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-xs font-semibold text-text-tertiary uppercase">Total Credits</p>
-            <p className="text-xl font-bold text-text-primary font-mono mt-1">+{formatINR(String(totalCredits))}</p>
+    <div data-appearance="light">
+      <div className="bg-background text-foreground min-h-screen">
+        <aside className="bg-sidebar text-sidebar-foreground border-y border-r border-border flex fixed inset-y-0 left-0 px-4 py-5 flex-col w-64">
+          <div className="flex px-3 items-center h-8">
+            <span className="font-semibold text-foreground text-lg tracking-[0.18em]">
+              DIGITAX
+            </span>
           </div>
-          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-xs font-semibold text-text-tertiary uppercase">Total Debits</p>
-            <p className="text-xl font-bold text-text-primary font-mono mt-1">−{formatINR(String(totalDebits))}</p>
+          <button className="text-left rounded-md bg-card text-foreground text-sm border border-border flex mt-6 px-3 justify-between items-center w-full h-11">
+            <span className="flex items-center gap-2 min-w-0">
+              <Building2 className="text-muted-foreground shrink-0 size-4" />
+              <span className="text-ellipsis whitespace-nowrap overflow-hidden">
+                Aster Labs Pvt. Ltd.
+              </span>
+            </span>
+            <ChevronsUpDown className="text-muted-foreground shrink-0 size-4" />
+          </button>
+          <nav className="flex mt-7 flex-col flex-1 gap-1">
+            <Link
+              href="/dashboard"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <LayoutDashboard className="size-4" />
+              <span>Overview</span>
+            </Link>
+            <Link
+              href="/transactions"
+              className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center gap-3 h-10"
+            >
+              <ArrowLeftRight className="size-4" />
+              <span>Transactions</span>
+            </Link>
+            <Link
+              href="/gst"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <ReceiptText className="size-4" />
+              <span>{`GST & Tax`}</span>
+            </Link>
+            <Link
+              href="/banking"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <Landmark className="size-4" />
+              <span>Banking</span>
+            </Link>
+            <Link
+              href="/reports"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <BarChart3 className="size-4" />
+              <span>Reports</span>
+            </Link>
+            <Link
+              href="/contacts"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <Users className="size-4" />
+              <span>Contacts</span>
+            </Link>
+            <Link
+              href="/settings"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <Settings className="size-4" />
+              <span>Settings</span>
+            </Link>
+          </nav>
+          <div className="border-x border-t border-b flex pt-4 flex-col gap-2">
+            <Link
+              href="/dashboard"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <CircleHelp className="size-4" />
+              <span>{`Help & support`}</span>
+            </Link>
+            <button className="text-left rounded-md flex px-3 py-2 items-center gap-3 hover:bg-accent active:bg-muted hover:active:bg-muted">
+              <span className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center shrink-0 size-8">
+                AK
+              </span>
+              <span className="min-w-0">
+                <span className="font-medium text-ellipsis whitespace-nowrap text-foreground text-sm block overflow-hidden">
+                  Ananya Kapoor
+                </span>
+                <span className="text-ellipsis whitespace-nowrap text-muted-foreground text-xs block overflow-hidden">
+                  Admin
+                </span>
+              </span>
+              <MoreHorizontal className="text-muted-foreground ml-auto shrink-0 size-4" />
+            </button>
           </div>
-          <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-xs font-semibold text-text-tertiary uppercase">Net Flow</p>
-            <p className={`text-xl font-bold font-mono mt-1 ${totalCredits >= totalDebits ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'}`}>
-              {totalCredits >= totalDebits ? '+' : '−'}{formatINR(String(Math.abs(totalCredits - totalDebits)))}
-            </p>
-          </div>
-        </div>
-
-        {/* Filters */ }
-        <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-3">
-            <Input
-              placeholder="Search description or reference…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full sm:w-80"
-            />
-            <div className="flex gap-1">
-              {typeOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setFilterType(opt.value as 'all' | 'credit' | 'debit' | 'unmatched')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                    filterType === opt.value
-                      ? 'bg-primary-600 border-primary-600 text-white'
-                      : 'border-border bg-surface-secondary text-text-secondary hover:bg-surface-tertiary'
-                  }`}
+        </aside>
+        <div className="ml-64 min-h-screen">
+          <header className="bg-background border-t border-r border-b border-b-border border-l-border flex fixed z-10 top-0 right-0 left-64 px-8 justify-between items-center h-16">
+            <div className="text-sm flex items-center gap-2">
+              <span className="text-muted-foreground">DIGITAX</span>
+              <ChevronRight className="text-muted-foreground size-4" />
+              <span className="font-medium text-foreground">
+                Transactions
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="rounded-md bg-card border border-border flex px-3 items-center gap-2 w-64 h-9">
+                <Search className="text-muted-foreground size-4" />
+                <input
+                  type="search"
+                  placeholder="Search"
+                  defaultValue=""
+                  className="bg-transparent text-foreground text-sm outline-none w-full placeholder:text-muted-foreground"
+                />
+              </label>
+              <button
+                aria-label="Notifications"
+                className="rounded-md text-muted-foreground flex justify-center items-center size-9 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              >
+                <Bell className="size-4" />
+              </button>
+              <button
+                aria-label="Open profile"
+                className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center size-8"
+              >
+                AK
+              </button>
+            </div>
+          </header>
+          <main className="px-8 pt-24 pb-8">
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="font-semibold text-2xl tracking-tight">
+                  Transactions
+                </h1>
+                <p className="text-muted-foreground text-sm mt-2">
+                  Review, categorize, and reconcile every business movement.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  className="h-9"
+                  onClick={() => router.push('/expense-capture')}
                 >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Transactions List */ }
-        <div className="rounded-2xl border border-border bg-surface shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="p-8">
-              <Skeleton variant="rect" width="full" height="4" className="mb-6" />
-              <div className="space-y-3">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <Skeleton key={i} variant="rect" height="60" className="w-full" />
-                ))}
-              </div>
-            </div>
-          ) : filteredTxns.length === 0 ? (
-            <EmptyState
-              icon={<ArrowLeftRight className="h-10 w-10 text-text-tertiary" />}
-              title="No transactions found"
-              description={
-                searchTerm || filterType !== 'all'
-                  ? 'Try adjusting your filters or search terms.'
-                  : 'Import your bank statement to begin tracking transactions.'
-              }
-              action={
-                <Button variant="primary" size="sm" onClick={() => setShowImportModal(true)}>
-                  <UploadCloud className="h-3.5 w-3.5 mr-1.5" /> Import Statement
+                  Add transaction
                 </Button>
-              }
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-surface-secondary border-b border-border">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase">Date</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase">Description</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase">Reference</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase">Direction</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase text-right">Amount</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-text-tertiary uppercase text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredTxns.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-surface-secondary transition-colors group">
-                      <td className="px-4 py-3.5">
-                        <span className="text-sm font-medium text-text-primary">
-                          {tx.transaction_date ? new Date(tx.transaction_date).toLocaleDateString('en-IN') : '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <p className="text-sm font-medium text-text-primary truncate" title={escapeHtml(tx.description || '')}>
-                          {escapeHtml(tx.description || 'Untitled')}
-                        </p>
-                        {tx.category && (
-                          <p className="text-xs text-text-tertiary">{escapeHtml(tx.category.replace('_', ' '))}</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className="text-xs text-text-tertiary font-mono">
-                          {escapeHtml(tx.reference_number || '—')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <DirectionBadge direction={tx.direction} />
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <span className={`text-sm font-bold font-mono ${tx.direction === 'credit' ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'}`}>
-                          {tx.direction === 'credit' ? '+' : '−'}{formatINR(tx.amount || '0')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <ReconciliationStatusBadge status={tx.reconciliation_status || 'unmatched'} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Import Modal */ }
-        <div className="fixed inset-0 z-50 hidden" aria-hidden={!showImportModal}>
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowImportModal(false)} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-surface border border-border rounded-3xl shadow-2xl w-full max-w-2xl p-6 animate-scale-in">
-              <div className="flex items-start justify-between mb-6">
-                <h3 className="text-lg font-bold text-text-primary">Import Bank Statement</h3>
-                <button onClick={() => setShowImportModal(false)} className="p-2 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-tertiary">
-                  <span className="sr-only">Close</span>
-                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <p className="text-sm text-text-secondary mb-6">
-                Upload a CSV bank statement to import transactions. Supported formats: HDFC, ICICI, SBI, UPI.
-              </p>
-              <input
-                type="file"
-                accept=".csv"
-                className="block w-full text-sm text-text-tertiary file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-600 file:text-white hover:file:bg-primary-700 mb-4"
-              />
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={() => setShowImportModal(false)}>Cancel</Button>
-                <Button variant="primary">Import Transactions</Button>
+                <Button variant="secondary" className="h-9">
+                  Import
+                </Button>
               </div>
             </div>
-          </div>
+            <div className="rounded-md bg-card border border-border flex mt-8 p-3 items-center gap-3">
+              <label className="rounded-md bg-background border border-input flex px-3 items-center gap-2 h-9 min-w-72">
+                <Search className="text-muted-foreground size-4" />
+                <input
+                  type="search"
+                  placeholder="Search by merchant or amount"
+                  defaultValue=""
+                  className="bg-transparent text-sm outline-none w-full placeholder:text-muted-foreground"
+                />
+              </label>
+              <Select defaultValue="all">
+                <SelectTrigger className="w-48 h-9">
+                  <SelectValue placeholder="All accounts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All accounts</SelectItem>
+                  <SelectItem value="icici">ICICI Current Account</SelectItem>
+                  <SelectItem value="hdfc">HDFC Current Account</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select defaultValue="all">
+                <SelectTrigger className="w-44 h-9">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  <SelectItem value="sales">Sales</SelectItem>
+                  <SelectItem value="software">{`Software & subscriptions`}</SelectItem>
+                  <SelectItem value="rent">Rent</SelectItem>
+                  <SelectItem value="taxes">Taxes</SelectItem>
+                  <SelectItem value="refunds">Refunds</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select defaultValue="jun-2024">
+                <SelectTrigger className="w-36 h-9">
+                  <SelectValue placeholder="Jun 2024" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="jun-2024">Jun 2024</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="secondary" className="ml-auto gap-2 h-9">
+                <SlidersHorizontal className="size-4" />
+                Filters
+              </Button>
+            </div>
+            <Card className="mt-6 overflow-hidden">
+              <div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Account</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-12" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="text-sm">24 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="rounded-md bg-primary/10 text-primary flex justify-center items-center size-8"
+                            onClick={() => router.push('/invoice-details')}
+                          >
+                            <ArrowDownToLine className="size-4" />
+                          </span>
+                          <span className="font-medium">
+                            Razorpay settlement
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>Sales</TableCell>
+                      <TableCell>HDFC Current</TableCell>
+                      <TableCell className="font-medium text-right text-primary">
+                        +₹86,400
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-primary/10 text-primary">
+                          Matched
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-sm">23 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-muted text-muted-foreground flex justify-center items-center size-8">
+                            <ArrowUpFromLine className="size-4" />
+                          </span>
+                          <span
+                            className="font-medium"
+                            onClick={() => router.push('/expense-capture')}
+                          >
+                            AWS India
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{`Software & subscriptions`}</TableCell>
+                      <TableCell>ICICI Current</TableCell>
+                      <TableCell className="font-medium text-right">
+                        -₹42,180
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className="text-destructive border-destructive/50"
+                        >
+                          Needs review
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-sm">21 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-muted text-muted-foreground flex justify-center items-center size-8">
+                            <ArrowUpFromLine className="size-4" />
+                          </span>
+                          <span
+                            className="font-medium"
+                            onClick={() => router.push('/invoice-details')}
+                          >
+                            Office lease
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>Rent</TableCell>
+                      <TableCell>ICICI Current</TableCell>
+                      <TableCell className="font-medium text-right">
+                        -₹1,20,000
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-primary/10 text-primary">
+                          Matched
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-sm">20 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-muted text-muted-foreground flex justify-center items-center size-8">
+                            <ArrowUpFromLine className="size-4" />
+                          </span>
+                          <span className="font-medium">TDS payment</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>Taxes</TableCell>
+                      <TableCell>ICICI Current</TableCell>
+                      <TableCell className="font-medium text-right">
+                        -₹18,500
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-primary/10 text-primary">
+                          Matched
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-sm">19 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-muted text-muted-foreground flex justify-center items-center size-8">
+                            <ArrowUpFromLine className="size-4" />
+                          </span>
+                          <span className="font-medium">
+                            Zoho Corporation
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{`Software & subscriptions`}</TableCell>
+                      <TableCell>HDFC Current</TableCell>
+                      <TableCell className="font-medium text-right">
+                        -₹8,400
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className="text-destructive border-destructive/50"
+                        >
+                          Needs review
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-sm">18 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-primary/10 text-primary flex justify-center items-center size-8">
+                            <RotateCcw className="size-4" />
+                          </span>
+                          <span
+                            className="font-medium"
+                            onClick={() => router.push('/invoice-details')}
+                          >
+                            Client refund
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>Refunds</TableCell>
+                      <TableCell>ICICI Current</TableCell>
+                      <TableCell className="font-medium text-right">
+                        -₹12,300
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-accent text-accent-foreground">
+                          Categorized
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+                <div className="border-x border-t border-b flex px-6 py-4 justify-between items-center">
+                  <span className="text-muted-foreground text-sm">
+                    Showing 1–6 of 248 transactions
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button className="p-0 size-8">1</Button>
+                    <Button className="p-0 size-8">2</Button>
+                    <Button className="p-0 size-8">3</Button>
+                    <Button variant="ghost" className="px-3 gap-1 h-8">
+                      Next
+                      <ChevronRight className="size-4" />
+                    </Button>
+                  </div>
+                  <span className="text-muted-foreground text-xs">
+                    Sample data
+                  </span>
+                </div>
+              </div>
+            </Card>
+          </main>
         </div>
       </div>
-    </AppShell>
+    </div>
   );
 }

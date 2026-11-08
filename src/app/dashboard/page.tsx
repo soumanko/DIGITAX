@@ -1,514 +1,467 @@
-﻿'use client';
+'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React from 'react';
 import { useRouter } from 'next/navigation';
-import { AppShell } from '@/components/layout/app-shell';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { formatINR, money } from '@/lib/decimal';
-import { escapeHtml } from '@/lib/security/xss-sanitizer';
-import { Invoice } from '@/types';
+import Link from 'next/link';
 import {
-  FileText,
   ArrowLeftRight,
-  Calculator,
-  MessageSquare,
-  AlertTriangle,
-  AlertCircle,
-  UploadCloud,
-  CheckCircle2,
-  Clock,
-  Sparkles,
-  ArrowUpRight,
-  TrendingUp,
-  Download,
-  ShieldCheck,
+  BarChart3,
+  Bell,
+  Building2,
   ChevronRight,
-  Plus,
-  RefreshCw
+  ChevronsUpDown,
+  CircleHelp,
+  Landmark,
+  LayoutDashboard,
+  MoreHorizontal,
+  ReceiptText,
+  Search,
+  Settings,
+  TrendingUp,
+  Users,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Area,
+  AreaChart as RechartsAreaChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
-export default function DashboardPage() {
+export default function ExecutiveOverview() {
   const router = useRouter();
-  const [shop, setShop] = useState<{ name: string; gstin: string | null; state: string | null; state_code: string | null; business_type: string | null; taxpayer_scheme: string | null; preferred_language: string | null } | null>(null);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [transactions, setTransactions] = useState<Record<string, unknown>[]>([]);
-  const [isDemo, setIsDemo] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchDashboardData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [shopRes, invRes, txnRes] = await Promise.all([
-        fetch('/api/shops'),
-        fetch('/api/invoices'),
-        fetch('/api/transactions'),
-      ]);
-
-      if (shopRes.ok) {
-        const shopData = await shopRes.json();
-        if (shopData.needsOnboarding) {
-          router.push('/onboarding');
-          return;
-        }
-        if (shopData.shop) {
-          setShop(shopData.shop);
-          setIsDemo(Boolean(shopData.isDemo));
-        }
-      } else {
-        throw new Error('Failed to load shop profile');
-      }
-
-      if (invRes.ok) {
-        const invData = await invRes.json();
-        if (Array.isArray(invData.invoices)) {
-          setInvoices(invData.invoices);
-        }
-      } else {
-        throw new Error('Failed to load invoices');
-      }
-
-      if (txnRes.ok) {
-        const txnData = await txnRes.json();
-        if (Array.isArray(txnData.transactions)) {
-          setTransactions(txnData.transactions);
-        }
-      } else {
-        throw new Error('Failed to load transactions');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard data. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const loadData = async () => {
-      await fetchDashboardData();
-    };
-    loadData();
-  }, []);
-
-  const handleRetry = () => {
-    fetchDashboardData();
-  };
-
-  // Financial calculations using decimal.js (DIGITAX-004)
-  const totalInwardTaxable = invoices
-    .filter(i => i.invoice_type === 'purchase_tax_invoice' || i.direction === 'purchase')
-    .reduce((acc, i) => acc.plus(money(i.taxable_value || '0')), money(0));
-
-  const totalOutwardTaxable = invoices
-    .filter(i => i.invoice_type === 'sales_tax_invoice' || i.direction === 'sales')
-    .reduce((acc, i) => acc.plus(money(i.taxable_value || '0')), money(0));
-
-  const totalITC = invoices
-    .filter(i => i.invoice_type === 'purchase_tax_invoice' || i.direction === 'purchase')
-    .reduce((acc, i) => acc.plus(money(i.cgst_total || '0').plus(money(i.sgst_total || '0')).plus(money(i.igst_total || '0')).plus(money(i.cess_total || '0'))), money(0));
-
-  const totalOutwardTax = invoices
-    .filter(i => i.invoice_type === 'sales_tax_invoice' || i.direction === 'sales')
-    .reduce((acc, i) => acc.plus(money(i.cgst_total || '0').plus(money(i.sgst_total || '0')).plus(money(i.igst_total || '0')).plus(money(i.cess_total || '0'))), money(0));
-
-  const netTaxPayable = money(totalOutwardTax.minus(totalITC).isNegative() ? 0 : totalOutwardTax.minus(totalITC).toNumber());
-
-  const pendingReviewCount = invoices.filter(i => i.review_state === 'pending_review').length;
-  const unmatchedTxnCount = transactions.filter(t => t.reconciliation_status === 'unmatched').length;
-
-  if (loading) {
-    return (
-      <AppShell>
-        <div className="flex flex-col items-center justify-center h-full">
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="flex flex-col items-center gap-4">
-              <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900/40 flex items-center justify-center text-primary-600 animate-pulse">
-                <RefreshCw className="h-5 w-5" />
-              </div>
-              <p className="text-sm text-text-secondary">Loading dashboard data...</p>
-            </div>
-          </div>
-        </div>
-      </AppShell>
-    );
-  }
-
-  if (error) {
-    return (
-      <AppShell>
-        <div className="flex flex-col items-center justify-center text-center py-20">
-          <Card>
-            <CardContent className="p-8 text-center">
-              <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-text-primary">Failed to Load Dashboard</h3>
-              <p className="text-sm text-text-secondary max-w-md mx-auto">{error}</p>
-              <Button onClick={handleRetry} variant="primary" className="mt-4">
-                <RefreshCw className="h-4 w-4 mr-2" /> Retry
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </AppShell>
-    );
-  }
-
   return (
-    <AppShell>
-      <div className="space-y-6">
-        {/* Compliance Guardrail Disclaimer Banner */}
-        <div className="flex items-center justify-between p-3 rounded-lg bg-surface border border-border shadow-xs text-xs text-text-secondary">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-primary-600 shrink-0" />
-            <span>
-              <strong>Filing Review Mode:</strong> All figures are generated for taxpayer review & CA verification. DIGITAX does not submit returns directly to the GST portal.
+    <div data-appearance="light">
+      <div className="bg-background text-foreground w-full h-fit min-h-screen w-screen min-w-screen max-w-screen overflow-visible">
+        <aside className="bg-sidebar text-sidebar-foreground border-y border-r border-border flex fixed inset-y-0 left-0 px-4 py-5 flex-col w-64">
+          <div className="flex px-3 items-center h-8">
+            <span className="font-semibold text-foreground text-lg tracking-[0.18em]">
+              DIGITAX
             </span>
           </div>
-          {shop && (
-            <Link href="/gst" className="hidden sm:inline-flex items-center text-primary-600 font-semibold hover:underline">
-              View GST Workspace <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
-          )}
-        </div>
-
-        {/* Top Header & Shop Information */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            {shop ? (
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">
-                    {escapeHtml(shop.name)}
-                  </h1>
-                  <Badge variant="success">Active</Badge>
-                  <Badge variant="outline">{escapeHtml(shop.taxpayer_scheme || '')}</Badge>
-                </div>
-                <p className="text-xs sm:text-sm text-text-secondary mt-1">
-                  GSTIN: <span className="font-mono font-medium text-text-primary">{escapeHtml(shop.gstin || 'Unregistered')}</span> â€¢ State: {escapeHtml(shop.state || '')} ({escapeHtml(shop.state_code || '')}) â€¢ {escapeHtml(shop.business_type || '')}
-                </p>
-              </div>
-            ) : (
-              <div>
-                <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">Dashboard</h1>
-                <p className="text-xs sm:text-sm text-text-secondary mt-1">No shop data available.</p>
-              </div>
-            )}
+          <button className="text-left rounded-md bg-card text-foreground text-sm border border-border flex mt-6 px-3 justify-between items-center w-full h-11">
+            <span className="flex items-center gap-2 min-w-0">
+              <Building2 className="text-muted-foreground shrink-0 size-4" />
+              <span className="text-ellipsis whitespace-nowrap overflow-hidden">
+                Aster Labs Pvt. Ltd.
+              </span>
+            </span>
+            <ChevronsUpDown className="text-muted-foreground shrink-0 size-4" />
+          </button>
+          <nav className="flex mt-7 flex-col flex-1 gap-1">
+            <a
+              href="#"
+              className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center gap-3 h-10"
+            >
+              <LayoutDashboard className="size-4" />
+              <span>Overview</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/transactions')}
+            >
+              <ArrowLeftRight className="size-4" />
+              <span>Transactions</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/gst')}
+            >
+              <ReceiptText className="size-4" />
+              <span>{`GST & Tax`}</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/banking')}
+            >
+              <Landmark className="size-4" />
+              <span>Banking</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/reports')}
+            >
+              <BarChart3 className="size-4" />
+              <span>Reports</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/contacts')}
+            >
+              <Users className="size-4" />
+              <span>Contacts</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/settings')}
+            >
+              <Settings className="size-4" />
+              <span>Settings</span>
+            </a>
+          </nav>
+          <div className="border-x border-t border-b flex pt-4 flex-col gap-2">
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <CircleHelp className="size-4" />
+              <span>{`Help & support`}</span>
+            </a>
+            <button className="text-left rounded-md flex px-3 py-2 items-center gap-3 hover:bg-accent active:bg-muted hover:active:bg-muted">
+              <span className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center shrink-0 size-8">
+                AK
+              </span>
+              <span className="min-w-0">
+                <span className="font-medium text-ellipsis whitespace-nowrap text-foreground text-sm block overflow-hidden">
+                  Ananya Kapoor
+                </span>
+                <span className="text-ellipsis whitespace-nowrap text-muted-foreground text-xs block overflow-hidden">
+                  Admin
+                </span>
+              </span>
+              <MoreHorizontal className="text-muted-foreground ml-auto shrink-0 size-4" />
+            </button>
           </div>
-          {shop && (
-            <div className="flex items-center gap-2.5">
-              <Link href="/documents">
-                <Button variant="primary" size="sm" className="shadow-xs">
-                  <UploadCloud className="h-4 w-4 mr-1.5" /> Upload Bill / Invoice
-                </Button>
-              </Link>
-              <Link href="/transactions">
-                <Button variant="secondary" size="sm">
-                  <Plus className="h-4 w-4 mr-1.5" /> Import Statement
-                </Button>
-              </Link>
+        </aside>
+        <div className="ml-64 min-h-screen">
+          <header className="bg-background border-t border-r border-b border-b-border border-l-border flex fixed z-10 top-0 right-0 left-64 px-8 justify-between items-center h-16">
+            <div className="text-sm flex items-center gap-2">
+              <span className="text-muted-foreground">DIGITAX</span>
+              <ChevronRight className="text-muted-foreground size-4" />
+              <span className="font-medium text-foreground">Overview</span>
             </div>
-          )}
-        </div>
-
-        {/* Filing Readiness Center Card */}
-        {shop && (
-          <Card className="border-primary-200 dark:border-primary-800/60 bg-gradient-to-r from-primary-50/70 via-surface to-emerald-50/50 dark:from-primary-950/30 dark:via-surface dark:to-emerald-950/20 shadow-xs">
-            <CardContent className="p-5">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-primary-700 dark:text-primary-400">
-                      October 2026 Return Preparation
-                    </span>
-                    <Badge variant="accent">Due in 25 Days</Badge>
-                  </div>
-                  <h3 className="text-lg font-bold text-text-primary">
-                    Readiness: 85% Complete (Draft Ready)
-                  </h3>
-                  <p className="text-xs text-text-secondary max-w-xl">
-                    {invoices.length} invoices recorded, {transactions.filter(t => t.reconciliation_status === 'matched').length} bank transactions matched. {pendingReviewCount} item(s) require human verification before filing final summary.
+            <div className="flex items-center gap-4">
+              <label className="rounded-md bg-card border border-border flex px-3 items-center gap-2 w-64 h-9">
+                <Search className="text-muted-foreground size-4" />
+                <input
+                  type="search"
+                  placeholder="Search"
+                  defaultValue=""
+                  className="bg-transparent text-foreground text-sm outline-none w-full placeholder:text-muted-foreground"
+                />
+              </label>
+              <button
+                aria-label="Notifications"
+                className="rounded-md text-muted-foreground flex justify-center items-center size-9 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              >
+                <Bell className="size-4" />
+              </button>
+              <button
+                aria-label="Open profile"
+                className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center size-8"
+              >
+                AK
+              </button>
+            </div>
+          </header>
+          <main className="px-8 pt-24 pb-8">
+            <div className="mx-auto max-w-7xl">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h1 className="font-semibold text-foreground text-2xl tracking-tight">
+                    Good morning, Ananya
+                  </h1>
+                  <p className="text-muted-foreground text-sm mt-2">
+                    Here&rsquo;s your business snapshot for 24 Jun 2024.
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Link href="/review">
-                    <Button variant="secondary" size="sm" className="bg-surface">
-                      <AlertTriangle className="h-4 w-4 mr-1 text-amber-600" />
-                      Review Issues ({pendingReviewCount + unmatchedTxnCount})
-                    </Button>
-                  </Link>
-                  <Link href="/exports">
-                    <Button variant="primary" size="sm">
-                      <Download className="h-4 w-4 mr-1" />
-                      Export Return Summary
-                    </Button>
-                  </Link>
+                  <Select defaultValue="This month">
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="This month">This month</SelectItem>
+                      <SelectItem value="Last month">Last month</SelectItem>
+                      <SelectItem value="This quarter">This quarter</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={() => router.push('/expense-capture')}>
+                    Add transaction
+                  </Button>
                 </div>
               </div>
-              <div className="mt-4 w-full bg-border rounded-full h-2 overflow-hidden">
-                <div className="bg-gradient-to-r from-primary-600 to-emerald-600 h-2 rounded-full w-[85%]" />
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Financial KPI Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* KPI 1 */}
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
-                <span>Outward Supplies (Sales)</span>
-                <TrendingUp className="h-4 w-4 text-emerald-600" />
-              </div>
-              <CardTitle className="text-2xl font-extrabold mt-1">
-                {formatINR(totalOutwardTaxable.toString())}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-xs text-text-secondary">
-              {invoices.filter(i => i.invoice_type === 'sales_tax_invoice' || i.direction === 'sales').length} Invoices
-            </CardContent>
-          </Card>
-
-          {/* KPI 2 */}
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
-                <span>Inward Supplies (Purchases)</span>
-                <FileText className="h-4 w-4 text-primary-600" />
-              </div>
-              <CardTitle className="text-2xl font-extrabold mt-1">
-                {formatINR(totalInwardTaxable.toString())}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-xs text-text-secondary">
-              {invoices.filter(i => i.invoice_type === 'purchase_tax_invoice' || i.direction === 'purchase').length} Bills
-            </CardContent>
-          </Card>
-
-          {/* KPI 3 */}
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
-                <span>Eligible ITC</span>
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              </div>
-              <CardTitle className="text-2xl font-extrabold mt-1 text-emerald-600">
-                {formatINR(totalITC.toString())}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-xs text-text-secondary">
-              Ready for GSTR-3B Table 4(A)(5)
-            </CardContent>
-          </Card>
-
-          {/* KPI 4 */}
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-text-secondary">
-                <span>Net Tax Payable</span>
-                <Calculator className="h-4 w-4 text-purple-600" />
-              </div>
-              <CardTitle className="text-2xl font-extrabold mt-1 text-primary-600">
-                {formatINR(netTaxPayable.toString())}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-xs text-text-secondary">
-              {netTaxPayable.isZero()
-                ? 'ITC fully offsets output GST liability'
-                : 'Net cash tax payment required before GSTR-3B due date'}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Quick Action Cards & Live Assistant */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: Recent Invoices */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <div>
-                  <CardTitle className="text-base font-bold">Recent Recorded Invoices</CardTitle>
-                  <CardDescription className="text-xs">Extracted via OCR with confidence grading</CardDescription>
-                </div>
-                <Link href="/documents" className="text-xs font-semibold text-primary-600 hover:underline">
-                  View all documents
-                </Link>
-              </CardHeader>
-              <CardContent className="p-0">
-                {invoices.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-text-secondary">
-                    <p className="font-semibold text-text-primary mb-1">No invoices recorded yet</p>
-                    <p className="text-[11px] mb-4">Upload vendor purchase bills or sales receipts to start automated bookkeeping.</p>
-                    <Link href="/documents">
-                      <Button size="sm" variant="primary">
-                        <UploadCloud className="h-3.5 w-3.5 mr-1" /> Upload First Invoice
-                      </Button>
-                    </Link>
+              <div className="grid mt-8 gap-4 grid-cols-4">
+                <Card className="p-5">
+                  <div className="flex justify-between items-start">
+                    <span className="text-muted-foreground text-sm">
+                      Total revenue
+                    </span>
+                    <TrendingUp className="text-primary size-4" />
                   </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
-                        <tr>
-                          <th className="px-4 py-2.5">Invoice #</th>
-                          <th className="px-4 py-2.5">Party</th>
-                          <th className="px-4 py-2.5">Type</th>
-                          <th className="px-4 py-2.5">Amount</th>
-                          <th className="px-4 py-2.5">Status</th>
-                          <th className="px-4 py-2.5 text-right">Review</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {invoices.slice(0, 10).map((inv) => (
-                          <tr key={inv.id} className="hover:bg-surface-tertiary/50 transition-colors">
-                            <td className="px-4 py-3 font-mono font-medium text-text-primary">
-                              {escapeHtml(inv.invoice_number)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="font-medium text-text-primary">
-                                {inv.invoice_type === 'purchase_tax_invoice' || inv.direction === 'purchase'
-                                  ? escapeHtml(inv.supplier_trade_name || inv.supplier_legal_name || inv.supplier_name || 'Vendor')
-                                  : escapeHtml(inv.customer_trade_name || inv.customer_legal_name || inv.buyer_name || 'Customer')}
-                              </div>
-                              <div className="font-mono text-[11px] text-text-tertiary">
-                                {inv.invoice_type === 'purchase_tax_invoice' || inv.direction === 'purchase'
-                                  ? escapeHtml(inv.supplier_gstin || 'Unregistered')
-                                  : escapeHtml(inv.customer_gstin || 'B2C Retail')}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 capitalize">
-                              {inv.invoice_type === 'purchase_tax_invoice' || inv.direction === 'purchase' ? 'Purchase' : 'Sales'}
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-text-primary">
-                              {formatINR(escapeHtml(inv.total_amount))}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                  inv.payment_status === 'paid'
-                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                }`}
-                              >
-                                {escapeHtml(inv.payment_status || 'unpaid')}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <Badge
-                                variant={
-                                  inv.review_state === 'confirmed'
-                                    ? 'success'
-                                    : inv.review_state === 'pending_review'
-                                    ? 'accent'
-                                    : 'destructive'
-                                }
-                              >
-                                {escapeHtml((inv.review_state || 'confirmed').replace('_', ' '))}
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="font-semibold text-2xl tracking-tight mt-4">
+                    ₹18,42,600
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Column: AI Assistant Card & Pending Items */}
-          <div className="space-y-4">
-            {/* AI Assistant Widget */}
-            <Card className="border-primary-200 dark:border-primary-800 bg-surface">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-7 w-7 rounded-lg bg-primary-600 flex items-center justify-center text-white">
-                      <Sparkles className="h-4 w-4" />
-                    </div>
-                    <CardTitle className="text-sm font-bold">GNANI EVON V3.3 Copilot</CardTitle>
+                  <div className="text-primary text-xs mt-2">
+                    +12.8%
+                    <span className="text-muted-foreground">vs last month</span>
                   </div>
-                  <Badge variant="primary">Indic Voice</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 text-xs">
-                <p className="bg-primary-50/80 dark:bg-primary-950/40 p-3 rounded-lg border border-primary-200/50 dark:border-primary-800/40 text-primary-900 dark:text-primary-200 leading-relaxed italic">
-                  &quot;Configure your GNANI_EVON_API_KEY to enable AI-powered assistance. Until then, use the Dashboard, GST Workspace, and Reconciliation Center to manage your bookkeeping.&quot;
-                </p>
-                <div className="pt-1 flex flex-col gap-2">
-                  <Link href="/assistant">
-                    <Button variant="primary" size="sm" className="w-full text-xs">
-                      <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-                      Open Voice / Text Assistant
-                    </Button>
-                  </Link>
-                  <Link href="/reconciliation">
-                    <Button variant="secondary" size="sm" className="w-full text-xs">
-                      <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" />
-                      Match Bank UPI Payments ({unmatchedTxnCount})
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Verification / Review Queue */}
-            {pendingReviewCount > 0 || unmatchedTxnCount > 0 ? (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold flex items-center gap-1.5">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                    Review Items Required
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2.5 text-xs">
-                  {pendingReviewCount > 0 && (
-                    <div className="p-2.5 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40">
-                      <div className="font-semibold text-text-primary">Invoices Requiring Review</div>
-                      <div className="text-text-secondary mt-0.5">{pendingReviewCount} invoice(s) need human verification before filing.</div>
-                      <Link href="/review" className="mt-1.5 inline-block text-[11px] font-bold text-amber-700 hover:underline">
-                        Resolve in Review Center â†’
-                      </Link>
+                </Card>
+                <Card className="p-5">
+                  <div className="flex justify-between items-start">
+                    <span className="text-muted-foreground text-sm">
+                      Total expenses
+                    </span>
+                  </div>
+                  <div className="font-semibold text-2xl tracking-tight mt-4">
+                    ₹11,26,340
+                  </div>
+                  <div className="text-primary text-xs mt-2">
+                    -4.2%
+                    <span className="text-muted-foreground">vs last month</span>
+                  </div>
+                </Card>
+                <Card className="p-5">
+                  <div className="flex justify-between items-start">
+                    <span className="text-muted-foreground text-sm">
+                      GST payable
+                    </span>
+                  </div>
+                  <div className="font-semibold text-2xl tracking-tight mt-4">
+                    ₹2,84,760
+                  </div>
+                  <div className="text-muted-foreground text-xs mt-2">
+                    Due in 6 days
+                  </div>
+                </Card>
+                <Card className="p-5">
+                  <div className="flex justify-between items-start">
+                    <span className="text-muted-foreground text-sm">
+                      Cash balance
+                    </span>
+                  </div>
+                  <div className="font-semibold text-2xl tracking-tight mt-4">
+                    ₹9,68,410
+                  </div>
+                  <div className="text-muted-foreground text-xs mt-2">
+                    Updated 10 min ago
+                  </div>
+                </Card>
+              </div>
+              <div className="grid mt-6 gap-6 grid-cols-3">
+                <Card className="p-6 col-span-2">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h2 className="font-semibold text-base">Cash flow</h2>
+                      <p className="text-muted-foreground text-xs mt-1">
+                        Revenue and expenses over time
+                      </p>
                     </div>
-                  )}
-                  {unmatchedTxnCount > 0 && (
-                    <div className="p-2.5 rounded-lg bg-surface-secondary border border-border">
-                      <div className="font-semibold text-text-primary">Unmatched Transactions</div>
-                      <div className="text-text-secondary mt-0.5">{unmatchedTxnCount} transaction(s) awaiting reconciliation.</div>
-                      <Link href="/reconciliation" className="mt-1.5 inline-block text-[11px] font-bold text-primary-600 hover:underline">
-                        Categorize Transaction â†’
-                      </Link>
+                    <Tabs defaultValue="6 months">
+                      <TabsList>
+                        <TabsTrigger value="6 months">6 months</TabsTrigger>
+                        <TabsTrigger value="12 months">12 months</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
+                  <ChartContainer
+                    config={{
+                      revenue: {
+                        label: 'Revenue',
+                        color: 'var(--color-chart-1)',
+                      },
+                      expenses: {
+                        label: 'Expenses',
+                        color: 'var(--color-chart-2)',
+                      },
+                    }}
+                    className="mt-6 w-full h-64"
+                  >
+                    <RechartsAreaChart
+                      data={[
+                        { month: 'Jan', revenue: 248000, expenses: 172000 },
+                        { month: 'Feb', revenue: 286000, expenses: 184000 },
+                        { month: 'Mar', revenue: 264000, expenses: 193000 },
+                        { month: 'Apr', revenue: 318000, expenses: 205000 },
+                        { month: 'May', revenue: 342000, expenses: 221000 },
+                        { month: 'Jun', revenue: 386000, expenses: 251000 },
+                      ]}
+                    >
+                      <CartesianGrid vertical={false} />
+                      <XAxis
+                        dataKey="month"
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={8}
+                      />
+                      <YAxis tickLine={false} axisLine={false} tickMargin={8} />
+                      <ChartTooltip />
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="var(--color-chart-1)"
+                        fill="var(--color-chart-1)"
+                        fillOpacity={0.16}
+                        strokeWidth={2}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="expenses"
+                        stroke="var(--color-chart-2)"
+                        fill="var(--color-chart-2)"
+                        fillOpacity={0.08}
+                        strokeWidth={2}
+                      />
+                    </RechartsAreaChart>
+                  </ChartContainer>
+                </Card>
+                <Card className="p-6">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h2 className="font-semibold text-base">
+                        GST filing status
+                      </h2>
+                      <p className="text-muted-foreground text-xs mt-1">
+                        GSTR-3B · June 2024
+                      </p>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="p-8 text-center border-dashed">
-                <CheckCircle2 className="h-10 w-10 text-emerald-600 mx-auto mb-2" />
-                <h3 className="text-base font-bold text-text-primary">
-                  All Items Verified & Cleared
-                </h3>
-                <p className="text-xs text-text-secondary mt-1 max-w-sm mx-auto">
-                  No pending review items or unmatched transactions remain.
-                </p>
-                <div className="mt-4">
-                  <Link href="/exports">
-                    <Button variant="primary" size="sm">
-                      Proceed to Return Exports â†’
+                    <span className="font-medium rounded-md bg-primary/10 text-primary text-xs px-2 py-1">
+                      In progress
+                    </span>
+                  </div>
+                  <div className="flex mt-8 justify-between items-end">
+                    <span className="text-muted-foreground text-sm">
+                      Completion
+                    </span>
+                    <span className="font-semibold text-lg">72%</span>
+                  </div>
+                  <div className="rounded-full bg-muted mt-3 w-full h-2">
+                    <div className="rounded-full bg-primary w-[72%] h-2" />
+                  </div>
+                  <div className="text-sm flex mt-6 justify-between items-center">
+                    <span className="text-muted-foreground">Due date</span>
+                    <span className="font-medium">20 Jul 2024</span>
+                  </div>
+                  <Button
+                    className="mt-6 w-full"
+                    onClick={() => router.push('/gst-return-filing')}
+                  >
+                    Review return
+                  </Button>
+                </Card>
+              </div>
+              <div className="grid mt-6 gap-6 grid-cols-2">
+                <Card className="p-6">
+                  <div className="flex justify-between items-center">
+                    <h2 className="font-semibold text-base">
+                      Recent transactions
+                    </h2>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => router.push('/transactions')}
+                    >
+                      View all transactions
                     </Button>
-                  </Link>
-                </div>
-              </Card>
-            )}
-          </div>
+                  </div>
+                  <div className="mt-5">
+                    <div className="border-t border-r border-b border-b-border border-l-border flex py-3 justify-between items-center">
+                      <div>
+                        <div className="font-medium text-sm">
+                          Razorpay settlement
+                        </div>
+                        <div className="text-muted-foreground text-xs mt-1">
+                          Sales · 24 Jun 2024
+                        </div>
+                      </div>
+                      <span className="font-medium text-sm">₹86,400</span>
+                    </div>
+                    <div className="border-t border-r border-b border-b-border border-l-border flex py-3 justify-between items-center">
+                      <div>
+                        <div className="font-medium text-sm">AWS India</div>
+                        <div className="text-muted-foreground text-xs mt-1">
+                          Software · 22 Jun 2024
+                        </div>
+                      </div>
+                      <span className="font-medium text-sm">₹42,180</span>
+                    </div>
+                    <div className="border-t border-r border-b border-b-border border-l-border flex py-3 justify-between items-center">
+                      <div>
+                        <div className="font-medium text-sm">Office lease</div>
+                        <div className="text-muted-foreground text-xs mt-1">
+                          Rent · 20 Jun 2024
+                        </div>
+                      </div>
+                      <span className="font-medium text-sm">₹1,20,000</span>
+                    </div>
+                    <div className="flex py-3 justify-between items-center">
+                      <div>
+                        <div className="font-medium text-sm">
+                          ICICI bank transfer
+                        </div>
+                        <div className="text-muted-foreground text-xs mt-1">
+                          Banking · 18 Jun 2024
+                        </div>
+                      </div>
+                      <span className="font-medium text-sm">₹2,50,000</span>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="p-6">
+                  <h2 className="font-semibold text-base">
+                    Tasks to keep moving
+                  </h2>
+                  <div className="flex mt-5 flex-col gap-2">
+                    <div className="rounded-md border border-border flex px-4 py-3 items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">
+                          Match 12 bank transactions
+                        </div>
+                        <span className="font-medium rounded-md bg-primary/10 text-primary text-xs inline-flex mt-1 px-2 py-1">
+                          To do
+                        </span>
+                      </div>
+                      <ChevronRight className="text-muted-foreground size-4" />
+                    </div>
+                    <div className="rounded-md border border-border flex px-4 py-3 items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">
+                          Upload purchase invoices
+                        </div>
+                        <span className="font-medium rounded-md bg-muted text-muted-foreground text-xs inline-flex mt-1 px-2 py-1">
+                          Pending
+                        </span>
+                      </div>
+                      <ChevronRight className="text-muted-foreground size-4" />
+                    </div>
+                    <div className="rounded-md border border-border flex px-4 py-3 items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">
+                          Review GST exceptions
+                        </div>
+                        <span className="font-medium rounded-md bg-muted text-muted-foreground text-xs inline-flex mt-1 px-2 py-1">
+                          Pending
+                        </span>
+                      </div>
+                      <ChevronRight className="text-muted-foreground size-4" />
+                    </div>
+                  </div>
+                </Card>
+              </div>
+              <p className="text-muted-foreground text-xs mt-8">
+                Sample data · Last synced 10 minutes ago
+              </p>
+            </div>
+          </main>
         </div>
       </div>
-    </AppShell>
+    </div>
   );
 }
-
-
-
