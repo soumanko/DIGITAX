@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { ThemeProvider } from '@/lib/theme-provider';
+import { ToastProvider } from '@/components/ui/toast';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -65,7 +67,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
-  themeColor: '#4f46e5',
+  themeColor: '#2563eb',
 };
 
 export default function RootLayout({
@@ -74,27 +76,30 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
-      <head>
-        {/* JSON-LD Organization structured data */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'Organization',
-              name: 'DIGITAX',
-              url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-              description:
-                'AI-powered GST bookkeeping and filing preparation platform for Indian small businesses.',
-              sameAs: [],
-            }),
-          }}
-        />
-      </head>
-      <body className="min-h-screen bg-surface antialiased">
-        {children}
-      </body>
-    </html>
+    <ThemeProvider>
+      <ToastProvider>
+        <html lang="en" className={inter.variable}>
+          <head>
+            <script
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{
+                __html: JSON.stringify({
+                  '@context': 'https://schema.org',
+                  '@type': 'Organization',
+                  name: 'DIGITAX',
+                  url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+                  description:
+                    'AI-powered GST bookkeeping and filing preparation platform for Indian small businesses.',
+                  sameAs: [],
+                }),
+              }}
+            />
+          </head>
+          <body className="min-h-screen bg-surface antialiased">
+            {children}
+          </body>
+        </html>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }

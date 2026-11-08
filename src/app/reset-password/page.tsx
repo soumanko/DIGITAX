@@ -6,100 +6,181 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
-import { ArrowLeft, CheckCircle2, Mail } from 'lucide-react';
+import { Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function ResetPasswordPage() {
+  const [step, setStep] = useState<'email' | 'confirm'>('email');
   const [email, setEmail] = useState('');
-  const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
-  const handleReset = async (e: React.FormEvent) => {
+  const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
+
     try {
       const supabase = createClient();
-      await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/update-password`,
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
       });
+
+      if (resetError) {
+        setError(resetError.message);
+        setLoading(false);
+        return;
+      }
+
+      setStep('confirm');
+      setSuccess(true);
     } catch (err) {
-      // Ignore or log
-    } finally {
-      setSubmitted(true);
+      setError(err instanceof Error ? err.message : 'Password reset failed.');
       setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-surface-secondary">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <Link href="/" className="inline-flex items-center gap-2 group mb-4">
-          <div className="h-10 w-10 rounded-xl bg-primary-600 flex items-center justify-center shadow-md">
-            <span className="text-white font-bold text-lg">D</span>
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-surface-secondary">
+        <div className="sm:w-full sm:max-w-md text-center">
+          <div className="flex justify-center mb-6">
+            <div className="h-12 w-12 rounded-2xl bg-success-100 dark:bg-success-900/20 flex items-center justify-center shadow-lg shadow-success-500/20">
+              <CheckCircle className="h-6 w-6 text-success-600 dark:text-success-400" />
+            </div>
           </div>
-          <span className="font-extrabold text-2xl text-text-primary tracking-tight">DIGITAX</span>
-        </Link>
-        <h2 className="text-2xl font-bold text-text-primary tracking-tight">
-          Reset password
-        </h2>
-        <p className="mt-2 text-sm text-text-secondary">
-          Enter your email and we will send you a recovery link
-        </p>
+          <h2 className="text-2xl font-bold text-text-primary tracking-tight mb-2">
+            Check your email
+          </h2>
+          <p className="text-sm text-text-secondary mb-6">
+            A password reset link has been sent to <strong>{email}</strong>. Please check your inbox and follow the instructions.
+          </p>
+          <Link href="/login" className="text-sm font-medium text-primary-600 hover:text-primary-500 dark:hover:text-primary-400">
+            Back to sign in
+          </Link>
+        </div>
       </div>
+    );
+  }
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <Card className="shadow-lg border-border">
-          <CardContent className="pt-6">
-            {submitted ? (
-              <div className="text-center py-4 space-y-3">
-                <div className="h-12 w-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="h-6 w-6" />
-                </div>
-                <h3 className="text-base font-bold text-text-primary">Password reset email sent</h3>
-                <p className="text-xs text-text-secondary max-w-xs mx-auto">
-                  If an account exists for {email}, you will receive a secure password reset link shortly.
-                </p>
-                <div className="pt-4">
-                  <Link href="/login">
-                    <Button variant="secondary" className="w-full">
-                      Back to Sign In
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleReset} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">
-                    Email address
-                  </label>
-                  <Input
-                    type="email"
-                    required
-                    placeholder="owner@yourshop.in"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="w-full"
-                  isLoading={loading}
-                >
-                  Send Recovery Link
-                </Button>
-                <div className="text-center pt-2">
-                  <Link
-                    href="/login"
-                    className="inline-flex items-center text-xs font-medium text-text-secondary hover:text-text-primary"
+  return (
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-surface-secondary">
+      <div className="sm:w-full sm:max-w-md text-center">
+        <div className="flex justify-center mb-6">
+          <div className="h-12 w-12 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-lg shadow-primary-500/30">
+            <Lock className="h-6 w-6 text-white" />
+          </div>
+        </div>
+        {step === 'email' ? (
+          <>
+            <h2 className="text-2xl font-bold text-text-primary tracking-tight mb-2">
+              Reset your password
+            </h2>
+            <p className="text-sm text-text-secondary mb-6">
+              Enter your email address and we&rsquo;ll send you a link to reset your password.
+            </p>
+
+            <Card className="mx-auto border border-border bg-surface shadow-sm">
+              <CardContent className="pt-6 pb-4">
+                {error && (
+                  <div className="mb-4 p-3 rounded-lg bg-error-50 dark:bg-error-50/20 border border-error-200 dark:border-error-800 text-xs text-error-700 dark:text-error-400 flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleRequestReset} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Email address</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+                      <Input
+                        type="email"
+                        required
+                        placeholder="owner@yourshop.in"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        autoComplete="email"
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    className="w-full mt-2"
+                    isLoading={loading}
                   >
-                    <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Back to sign in
+                    Send Reset Link
+                  </Button>
+                </form>
+              </CardContent>
+              <CardFooter className="border-t border-border bg-surface-secondary/50 py-3 text-center text-xs text-text-tertiary">
+                <span className="flex items-center justify-center gap-1 w-full">
+                  Remember your password?{' '}
+                  <Link href="/login" className="font-semibold text-primary-600 hover:text-primary-500 dark:hover:text-primary-400">
+                    Sign in
                   </Link>
-                </div>
-              </form>
-            )}
-          </CardContent>
-        </Card>
+                </span>
+              </CardFooter>
+            </Card>
+          </>
+        ) : (
+          <>
+            <h2 className="text-2xl font-bold text-text-primary tracking-tight mb-2">
+              Reset Password
+            </h2>
+            <p className="text-sm text-text-secondary mb-6">
+              Create a new password for your account.
+            </p>
+
+            <Card className="mx-auto border border-border bg-surface shadow-sm">
+              <CardContent className="pt-6 pb-4">
+                <form className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">New Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+                      <Input
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                        className="pl-10 pr-10"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">Confirm New Password</label>
+                    <Input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="w-full mt-2"
+                    disabled
+                  >
+                    Update Password
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        <p className="mt-6 text-xs text-text-secondary">
+          Didn&rsquo;t receive an email? Check your spam folder or{' '}
+          <Link href="/login" className="font-semibold text-primary-600 hover:text-primary-500 dark:hover:text-primary-400">
+            try signing in
+          </Link>
+        </p>
       </div>
     </div>
   );

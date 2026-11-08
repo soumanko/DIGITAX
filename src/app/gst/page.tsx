@@ -1,444 +1,410 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { DEMO_SHOP, DEMO_INVOICES } from '@/lib/demo-data';
-import { generateGSTPeriodSummary } from '@/lib/gst/calculator';
-import { formatINR } from '@/lib/decimal';
 import {
-  Calculator,
-  Download,
-  ShieldCheck,
-  CheckCircle2,
-  AlertTriangle,
-  FileSpreadsheet,
-  FileCheck,
-  TrendingUp,
-  ArrowRight
+  ArrowLeftRight,
+  BarChart3,
+  Bell,
+  Building2,
+  ChevronRight,
+  ChevronsUpDown,
+  CircleHelp,
+  Landmark,
+  LayoutDashboard,
+  MoreHorizontal,
+  ReceiptText,
+  Search,
+  Settings,
+  Users,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ChartContainer } from '@/components/ui/chart';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Pie, PieChart as RechartsPieChart } from 'recharts';
 
-export default function GSTWorkspacePage() {
-  const [shop, setShop] = useState(DEMO_SHOP);
-  const [invoices, setInvoices] = useState(DEMO_INVOICES);
-  const [selectedPeriod, setSelectedPeriod] = useState({ year: 2026, month: 10 });
-  const [activeTab, setActiveTab] = useState<'gstr3b' | 'gstr1' | 'itc_ledger'>('gstr3b');
-  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
-  const [snapshotSaved, setSnapshotSaved] = useState(false);
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const [shopRes, invRes] = await Promise.all([
-          fetch('/api/shops'),
-          fetch('/api/invoices'),
-        ]);
-        if (shopRes.ok) {
-          const shopData = await shopRes.json();
-          if (shopData.shop) setShop(shopData.shop);
-        }
-        if (invRes.ok) {
-          const invData = await invRes.json();
-          if (Array.isArray(invData.invoices) && invData.invoices.length > 0) {
-            setInvoices(invData.invoices);
-          }
-        }
-      } catch (e) {
-        console.warn('Could not load remote GST records, maintaining current view:', e);
-      }
-    }
-    loadData();
-  }, []);
-
-  // Compute live deterministic GST summary using our GST engine
-  const summary = generateGSTPeriodSummary(
-    shop.id,
-    selectedPeriod.year,
-    selectedPeriod.month,
-    invoices
-  );
-
-  const handleSaveSnapshot = async () => {
-    setIsSavingSnapshot(true);
-    try {
-      const res = await fetch('/api/gst/summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          year: selectedPeriod.year,
-          month: selectedPeriod.month,
-          summary,
-        }),
-      });
-      if (res.ok) {
-        setSnapshotSaved(true);
-        setTimeout(() => setSnapshotSaved(false), 4000);
-      }
-    } catch (e) {
-      console.warn('Snapshot persistence notice:', e);
-    } finally {
-      setIsSavingSnapshot(false);
-    }
-  };
-
+export default function GSTTax() {
+  const router = useRouter();
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
-        {/* Compliance Guardrail Disclaimer */}
-        <div className="p-3 rounded-lg bg-surface border border-border flex items-center justify-between text-xs text-text-secondary">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span>
-              <strong>Statutory Compliance Boundary:</strong> DIGITAX provides deterministic calculation & review drafts. All numbers should be validated before final filing submission on the GSTN portal.
+    <div data-appearance="light">
+      <div className="bg-background text-foreground min-h-screen">
+        <aside className="bg-sidebar text-sidebar-foreground border-y border-r border-border flex fixed inset-y-0 left-0 px-4 py-5 flex-col w-64">
+          <div className="flex px-3 items-center h-8">
+            <span className="font-semibold text-foreground text-lg tracking-[0.18em]">
+              DIGITAX
             </span>
           </div>
-          <Link href="/exports">
-            <Button variant="ghost" size="sm" className="text-primary-600 text-xs h-7">
-              Download CA Audit Pack →
-            </Button>
-          </Link>
-        </div>
-
-        {/* Header & Period Switcher */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">
-              GST Calculation & Return Workspace
-            </h1>
-            <p className="text-xs sm:text-sm text-text-secondary mt-1">
-              Deterministic GSTR-1 outward tables and GSTR-3B tax computation with zero floating-point rounding errors.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            <select
-              value={`${selectedPeriod.year}-${selectedPeriod.month}`}
-              onChange={(e) => {
-                const [y, m] = e.target.value.split('-').map(Number);
-                setSelectedPeriod({ year: y, month: m });
-              }}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-primary focus:ring-2 focus:ring-primary-500"
+          <button className="text-left rounded-md bg-card text-foreground text-sm border border-border flex mt-6 px-3 justify-between items-center w-full h-11">
+            <span className="flex items-center gap-2 min-w-0">
+              <Building2 className="text-muted-foreground shrink-0 size-4" />
+              <span className="text-ellipsis whitespace-nowrap overflow-hidden">
+                Aster Labs Pvt. Ltd.
+              </span>
+            </span>
+            <ChevronsUpDown className="text-muted-foreground shrink-0 size-4" />
+          </button>
+          <nav className="flex mt-7 flex-col flex-1 gap-1">
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/dashboard')}
             >
-              <option value="2026-10">October 2026 (Current Period)</option>
-              <option value="2026-9">September 2026</option>
-              <option value="2026-8">August 2026</option>
-            </select>
-
-            <Link href="/exports">
-              <Button variant="primary" size="sm" className="shadow-xs">
-                <Download className="h-4 w-4 mr-1.5" />
-                Export Filing JSON
-              </Button>
-            </Link>
+              <LayoutDashboard className="size-4" />
+              <span>Overview</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/transactions')}
+            >
+              <ArrowLeftRight className="size-4" />
+              <span>Transactions</span>
+            </a>
+            <a
+              href="#"
+              className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center gap-3 h-10"
+            >
+              <ReceiptText className="size-4" />
+              <span>{`GST & Tax`}</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/banking')}
+            >
+              <Landmark className="size-4" />
+              <span>Banking</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/reports')}
+            >
+              <BarChart3 className="size-4" />
+              <span>Reports</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/contacts')}
+            >
+              <Users className="size-4" />
+              <span>Contacts</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => router.push('/settings')}
+            >
+              <Settings className="size-4" />
+              <span>Settings</span>
+            </a>
+          </nav>
+          <div className="border-x border-t border-b flex pt-4 flex-col gap-2">
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <CircleHelp className="size-4" />
+              <span>{`Help & support`}</span>
+            </a>
+            <button className="text-left rounded-md flex px-3 py-2 items-center gap-3 hover:bg-accent active:bg-muted hover:active:bg-muted">
+              <span className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center shrink-0 size-8">
+                AK
+              </span>
+              <span className="min-w-0">
+                <span className="font-medium text-ellipsis whitespace-nowrap text-foreground text-sm block overflow-hidden">
+                  Ananya Kapoor
+                </span>
+                <span className="text-ellipsis whitespace-nowrap text-muted-foreground text-xs block overflow-hidden">
+                  Admin
+                </span>
+              </span>
+              <MoreHorizontal className="text-muted-foreground ml-auto shrink-0 size-4" />
+            </button>
           </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex border-b border-border gap-2">
-          <button
-            onClick={() => setActiveTab('gstr3b')}
-            className={`pb-3 px-4 text-xs font-bold transition-colors border-b-2 ${
-              activeTab === 'gstr3b'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            GSTR-3B Monthly Return Summary
-          </button>
-          <button
-            onClick={() => setActiveTab('gstr1')}
-            className={`pb-3 px-4 text-xs font-bold transition-colors border-b-2 ${
-              activeTab === 'gstr1'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            GSTR-1 Outward Supplies (B2B / B2C)
-          </button>
-          <button
-            onClick={() => setActiveTab('itc_ledger')}
-            className={`pb-3 px-4 text-xs font-bold transition-colors border-b-2 ${
-              activeTab === 'itc_ledger'
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            Eligible ITC Ledger (Table 4)
-          </button>
-        </div>
-
-        {/* Tab 1: GSTR-3B */}
-        {activeTab === 'gstr3b' && (
-          <div className="space-y-6">
-            {/* Net Tax Liability Summary Card */}
-            <Card className="bg-gradient-to-r from-primary-900 to-slate-900 text-white">
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div>
-                    <span className="text-xs uppercase tracking-wider text-primary-200 font-semibold">
-                      Net Tax Payable for October 2026
+        </aside>
+        <div className="ml-64 min-h-screen">
+          <header className="bg-background border-t border-r border-b border-b-border border-l-border flex fixed z-10 top-0 right-0 left-64 px-8 justify-between items-center h-16">
+            <div className="text-sm flex items-center gap-2">
+              <span className="text-muted-foreground">DIGITAX</span>
+              <ChevronRight className="text-muted-foreground size-4" />
+              <span className="font-medium text-foreground">{`GST & Tax`}</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="rounded-md bg-card border border-border flex px-3 items-center gap-2 w-64 h-9">
+                <Search className="text-muted-foreground size-4" />
+                <input
+                  type="search"
+                  placeholder="Search"
+                  className="bg-transparent text-foreground text-sm outline-none w-full placeholder:text-muted-foreground"
+                />
+              </label>
+              <button
+                aria-label="Notifications"
+                className="rounded-md text-muted-foreground flex justify-center items-center size-9 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              >
+                <Bell className="size-4" />
+              </button>
+              <button
+                aria-label="Open profile"
+                className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center size-8"
+              >
+                AK
+              </button>
+            </div>
+          </header>
+          <main className="px-8 pt-24 pb-10">
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="font-semibold text-2xl tracking-tight">{`GST & Tax`}</h1>
+                <p className="text-muted-foreground text-sm mt-2">
+                  Stay ahead of registrations, returns, and input credits.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Select defaultValue="FY 2024–25">
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FY 2024–25">FY 2024–25</SelectItem>
+                    <SelectItem value="FY 2023–24">FY 2023–24</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={() => router.push('/gst-return-filing')}>
+                  Prepare return
+                </Button>
+              </div>
+            </div>
+            <div className="grid mt-8 gap-4 grid-cols-4">
+              <Card>
+                <CardContent className="p-5">
+                  <p className="text-muted-foreground text-sm">Output tax</p>
+                  <p className="font-semibold text-xl mt-3">₹4,76,820</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-5">
+                  <p className="text-muted-foreground text-sm">
+                    Input credit
+                  </p>
+                  <p className="font-semibold text-xl mt-3">₹1,92,060</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-5">
+                  <p className="text-muted-foreground text-sm">Net payable</p>
+                  <p className="font-semibold text-xl mt-3">₹2,84,760</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-5">
+                  <p className="text-muted-foreground text-sm">
+                    Filing health
+                  </p>
+                  <div className="flex mt-3 justify-between items-end">
+                    <p className="font-semibold text-xl">86%</p>
+                    <span className="font-medium rounded-md bg-primary/10 text-primary text-xs px-2 py-1">
+                      Good standing
                     </span>
-                    <h2 className="text-3xl font-extrabold mt-1">
-                      {formatINR(summary.netTaxPayable.total)}
-                    </h2>
-                    <p className="text-xs text-primary-200 mt-1">
-                      Eligible Input Tax Credit (ITC) exceeds outward tax liability. Remaining credit carries forward to next month.
-                    </p>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-4 text-center bg-white/10 p-4 rounded-xl backdrop-blur-xs">
-                    <div>
-                      <div className="text-[10px] text-primary-200 uppercase font-semibold">Net CGST</div>
-                      <div className="text-sm font-bold mt-0.5">{formatINR(summary.netTaxPayable.cgst)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-primary-200 uppercase font-semibold">Net SGST</div>
-                      <div className="text-sm font-bold mt-0.5">{formatINR(summary.netTaxPayable.sgst)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-primary-200 uppercase font-semibold">Net IGST</div>
-                      <div className="text-sm font-bold mt-0.5">{formatINR(summary.netTaxPayable.igst)}</div>
-                    </div>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="grid mt-6 gap-6 grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Return calendar</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Tabs defaultValue="Jun">
+                    <TabsList className="grid grid-cols-5 w-full">
+                      <TabsTrigger value="Apr">Apr</TabsTrigger>
+                      <TabsTrigger value="May">May</TabsTrigger>
+                      <TabsTrigger value="Jun">Jun</TabsTrigger>
+                      <TabsTrigger value="Jul">Jul</TabsTrigger>
+                      <TabsTrigger value="Aug">Aug</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="Jun" className="mt-5">
+                      <div className="flex flex-col gap-3">
+                        <div className="rounded-md border border-border flex p-4 justify-between items-center">
+                          <div>
+                            <p className="font-medium text-sm">GSTR-1</p>
+                            <p className="text-muted-foreground text-xs mt-1">
+                              Due 11 Jul 2024
+                            </p>
+                          </div>
+                          <span className="font-medium rounded-md bg-primary/10 text-primary text-xs px-2 py-1">
+                            Ready to file
+                          </span>
+                        </div>
+                        <div className="rounded-md border border-border flex p-4 justify-between items-center">
+                          <div>
+                            <p className="font-medium text-sm">GSTR-3B</p>
+                            <p className="text-muted-foreground text-xs mt-1">
+                              Due 20 Jul 2024
+                            </p>
+                          </div>
+                          <span className="font-medium rounded-md bg-primary/10 text-primary text-xs px-2 py-1">
+                            In progress
+                          </span>
+                        </div>
+                        <div className="rounded-md border border-border flex p-4 justify-between items-center">
+                          <div>
+                            <p className="font-medium text-sm">TDS return</p>
+                            <p className="text-muted-foreground text-xs mt-1">
+                              Due 31 Jul 2024
+                            </p>
+                          </div>
+                          <span className="font-medium rounded-md bg-muted text-muted-foreground text-xs px-2 py-1">
+                            Upcoming
+                          </span>
+                        </div>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>GST overview</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer
+                    config={{
+                      output: {
+                        label: "Output tax",
+                        color: "var(--color-chart-1)",
+                      },
+                      input: {
+                        label: "Input tax credit",
+                        color: "var(--color-chart-2)",
+                      },
+                      net: {
+                        label: "Net payable",
+                        color: "var(--color-chart-3)",
+                      },
+                    }}
+                    className="mx-auto w-full h-48"
+                  >
+                    <RechartsPieChart>
+                      <Pie
+                        data={[
+                          {
+                            name: "Output tax",
+                            value: 476820,
+                            fill: "var(--color-chart-1)",
+                          },
+                          {
+                            name: "Input tax credit",
+                            value: 192060,
+                            fill: "var(--color-chart-2)",
+                          },
+                          {
+                            name: "Net payable",
+                            value: 284760,
+                            fill: "var(--color-chart-3)",
+                          },
+                        ]}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={52}
+                        outerRadius={76}
+                      />
+                    </RechartsPieChart>
+                  </ChartContainer>
+                  <div className="text-muted-foreground text-xs flex mt-3 justify-center gap-4">
+                    <span className="flex items-center gap-2">
+                      <span className="rounded-full bg-chart-1 size-2" />
+                      Output tax
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="rounded-full bg-chart-2 size-2" />
+                      Input tax credit
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="rounded-full bg-chart-3 size-2" />
+                      Net payable
+                    </span>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Table 3.1: Outward Supplies */}
-            <Card>
-              <CardHeader className="pb-3 border-b border-border bg-surface-secondary/40">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-bold">
-                    Table 3.1: Outward Taxable Supplies (other than zero rated, nil rated and exempted)
-                  </CardTitle>
-                  <Badge variant="outline">GSTR-3B</Badge>
-                </div>
+                  <div className="border-x border-t border-b mt-6 pt-4">
+                    <span className="font-medium rounded-md bg-primary/10 text-primary text-xs px-2 py-1">
+                      Active · Regular
+                    </span>
+                    <p className="font-mono text-sm mt-3">27AABCU9603R1ZV</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            <Card className="mt-6">
+              <CardHeader className="flex flex-row justify-between items-center">
+                <CardTitle>Input tax credit</CardTitle>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/transactions')}
+                >
+                  Review unmatched invoices
+                </Button>
               </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
-                    <tr>
-                      <th className="px-4 py-2.5">Nature of Supply</th>
-                      <th className="px-4 py-2.5 text-right">Taxable Value</th>
-                      <th className="px-4 py-2.5 text-right">IGST</th>
-                      <th className="px-4 py-2.5 text-right">CGST</th>
-                      <th className="px-4 py-2.5 text-right">SGST</th>
-                      <th className="px-4 py-2.5 text-right">Cess</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    <tr>
-                      <td className="px-4 py-3 font-semibold text-text-primary">
-                        (a) Outward taxable supplies (sales)
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-text-primary">
-                        {formatINR(summary.gstr3b.outward_supplies.taxableValue)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-text-primary">
-                        {formatINR(summary.gstr3b.outward_supplies.igst)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-text-primary">
-                        {formatINR(summary.gstr3b.outward_supplies.cgst)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-text-primary">
-                        {formatINR(summary.gstr3b.outward_supplies.sgst)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-text-secondary">
-                        ₹0.00
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Supplier</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell>Tata Communications</TableCell>
+                      <TableCell>₹24,380</TableCell>
+                      <TableCell>
+                        <span className="text-primary text-sm">Eligible</span>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>AWS India</TableCell>
+                      <TableCell>₹8,436</TableCell>
+                      <TableCell>
+                        <span className="text-primary text-sm">Eligible</span>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>WeWork India</TableCell>
+                      <TableCell>₹14,220</TableCell>
+                      <TableCell>
+                        <span className="text-muted-foreground text-sm">
+                          Pending invoice
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
-
-            {/* Table 4: Eligible ITC */}
-            <Card>
-              <CardHeader className="pb-3 border-b border-border bg-surface-secondary/40">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-bold">
-                    Table 4: Eligible Input Tax Credit (ITC) Available
-                  </CardTitle>
-                  <Badge variant="success">All Other ITC</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
-                    <tr>
-                      <th className="px-4 py-2.5">Details</th>
-                      <th className="px-4 py-2.5 text-right">IGST</th>
-                      <th className="px-4 py-2.5 text-right">CGST</th>
-                      <th className="px-4 py-2.5 text-right">SGST</th>
-                      <th className="px-4 py-2.5 text-right">Cess</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    <tr>
-                      <td className="px-4 py-3 font-semibold text-text-primary">
-                        (A)(5) All other ITC (Purchases from registered suppliers)
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-text-primary">
-                        {formatINR(summary.gstr3b.eligible_itc.all_other_itc.igst)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600">
-                        {formatINR(summary.gstr3b.eligible_itc.all_other_itc.cgst)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600">
-                        {formatINR(summary.gstr3b.eligible_itc.all_other_itc.sgst)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-text-secondary">
-                        ₹0.00
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Tab 2: GSTR-1 */}
-        {activeTab === 'gstr1' && (
-          <div className="space-y-6">
-            {/* Table 4 B2B */}
-            <Card>
-              <CardHeader className="pb-3 border-b border-border bg-surface-secondary/40">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-bold">
-                    Table 4: Taxable outward supplies made to registered persons (B2B)
-                  </CardTitle>
-                  <Badge variant="primary">{summary.gstr1.b2b.invoiceCount} Invoices</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
-                    <tr>
-                      <th className="px-4 py-2.5">GSTIN / Recipient</th>
-                      <th className="px-4 py-2.5">Invoice #</th>
-                      <th className="px-4 py-2.5">Date</th>
-                      <th className="px-4 py-2.5 text-right">Taxable Value</th>
-                      <th className="px-4 py-2.5 text-right">CGST</th>
-                      <th className="px-4 py-2.5 text-right">SGST</th>
-                      <th className="px-4 py-2.5 text-right">IGST</th>
-                      <th className="px-4 py-2.5 text-right">Total Invoice</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {summary.gstr1.b2b.invoices.map((inv) => (
-                      <tr key={inv.id} className="hover:bg-surface-tertiary/50">
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-text-primary">
-                            {inv.customer_legal_name}
-                          </div>
-                          <div className="font-mono text-[11px] text-text-tertiary">
-                            {inv.customer_gstin}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 font-mono font-bold text-text-primary">
-                          {inv.invoice_number}
-                        </td>
-                        <td className="px-4 py-3 text-text-secondary">
-                          {inv.invoice_date}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-text-primary">
-                          {formatINR(inv.taxable_value)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-text-primary">
-                          {formatINR(inv.cgst_amount || inv.cgst_total || '0.00')}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-text-primary">
-                          {formatINR(inv.sgst_amount || inv.sgst_total || '0.00')}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-text-primary">
-                          {formatINR(inv.igst_amount || inv.igst_total || '0.00')}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-text-primary">
-                          {formatINR(inv.total_amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-
-            {/* Table 7 B2CS Small Retail */}
-            <Card>
-              <CardHeader className="pb-3 border-b border-border bg-surface-secondary/40">
-                <CardTitle className="text-sm font-bold">
-                  Table 7: Taxable supplies to unregistered persons (B2C Small Retail Counter)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 text-xs text-text-secondary">
-                Consolidated counter retail sales within state (POS: 27 Maharashtra): Taxable Value: <strong className="text-text-primary">{formatINR(summary.gstr1.b2c_small.taxableValue)}</strong>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Tab 3: ITC Ledger */}
-        {activeTab === 'itc_ledger' && (
-          <div className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3 border-b border-border bg-surface-secondary/40">
-                <CardTitle className="text-sm font-bold">
-                  Inward Tax Invoices (Eligible Input Tax Credit Breakdown)
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  All active purchase bills recorded for October 2026
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
-                    <tr>
-                      <th className="px-4 py-2.5">Supplier</th>
-                      <th className="px-4 py-2.5">GSTIN</th>
-                      <th className="px-4 py-2.5">Bill #</th>
-                      <th className="px-4 py-2.5 text-right">Taxable Value</th>
-                      <th className="px-4 py-2.5 text-right">CGST (ITC)</th>
-                      <th className="px-4 py-2.5 text-right">SGST (ITC)</th>
-                      <th className="px-4 py-2.5 text-right">Total Eligible ITC</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {invoices.filter(i => i.invoice_type === 'purchase_tax_invoice' || i.direction === 'purchase').map((inv) => (
-                      <tr key={inv.id} className="hover:bg-surface-tertiary/50">
-                        <td className="px-4 py-3 font-semibold text-text-primary">
-                          {inv.supplier_legal_name}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-text-secondary">
-                          {inv.supplier_gstin}
-                        </td>
-                        <td className="px-4 py-3 font-mono font-bold text-text-primary">
-                          {inv.invoice_number}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-text-primary">
-                          {formatINR(inv.taxable_value)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-emerald-600 font-semibold">
-                          {formatINR(inv.cgst_amount || inv.cgst_total || '0.00')}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-emerald-600 font-semibold">
-                          {formatINR(inv.sgst_amount || inv.sgst_total || '0.00')}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600">
-                          {formatINR(inv.total_tax_amount || '0.00')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+          </main>
+        </div>
       </div>
-    </DashboardLayout>
+    </div>
   );
 }
+

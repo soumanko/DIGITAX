@@ -1,359 +1,485 @@
 'use client';
 
-import React, { useState } from 'react';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { DEMO_TRANSACTIONS } from '@/lib/demo-data';
-import { formatINR } from '@/lib/decimal';
-import { Transaction } from '@/types';
+import React from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
+  ArrowDownToLine,
   ArrowLeftRight,
-  UploadCloud,
+  ArrowUpFromLine,
+  BarChart3,
+  Bell,
+  Building2,
+  ChevronRight,
+  ChevronsUpDown,
+  CircleHelp,
+  Landmark,
+  LayoutDashboard,
+  MoreHorizontal,
+  ReceiptText,
+  RotateCcw,
   Search,
-  Filter,
-  CheckCircle2,
-  Clock,
-  ArrowUpRight,
-  ArrowDownLeft,
-  FileSpreadsheet,
-  Plus,
-  HelpCircle
+  SearchX,
+  Settings,
+  SlidersHorizontal,
+  Users,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
-import { parseBankStatementCSV, ParsedCsvTransaction } from '@/lib/csv-parser';
-
-export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(DEMO_TRANSACTIONS);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'credit' | 'debit' | 'unmatched'>('all');
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [isParsing, setIsParsing] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [parsedPreview, setParsedPreview] = useState<ParsedCsvTransaction[]>([]);
-  const [importErrors, setImportErrors] = useState<string[]>([]);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-
-  const fetchTransactions = async () => {
-    try {
-      const res = await fetch('/api/transactions');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.transactions) && data.transactions.length > 0) {
-          setTransactions(data.transactions);
-        }
-      }
-    } catch (e) {
-      console.warn('Could not fetch remote transactions, maintaining current view:', e);
-    }
-  };
-
-  React.useEffect(() => {
-    const loadData = async () => {
-      await fetchTransactions();
-    };
-    loadData();
-  }, []);
-
-  const filteredTxns = transactions.filter((t) => {
-    const matchesSearch =
-      (t.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (t.reference_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (t.category || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-    if (filterType === 'credit') return matchesSearch && (t.transaction_type === 'credit' || t.direction === 'credit');
-    if (filterType === 'debit') return matchesSearch && (t.transaction_type === 'debit' || t.direction === 'debit');
-    if (filterType === 'unmatched') return matchesSearch && t.reconciliation_status === 'unmatched';
-    return matchesSearch;
-  });
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsParsing(true);
-    setImportErrors([]);
-    setParsedPreview([]);
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      const res = parseBankStatementCSV(text);
-      setIsParsing(false);
-
-      if (res.success) {
-        setParsedPreview(res.transactions);
-      } else {
-        setImportErrors(res.errors);
-      }
-    };
-    reader.onerror = () => {
-      setIsParsing(false);
-      setImportErrors(['Error reading CSV file']);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleConfirmImport = async () => {
-    if (parsedPreview.length === 0) return;
-
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactions: parsedPreview }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.transactions)) {
-          setTransactions([...data.transactions, ...transactions]);
-        }
-        setShowImportModal(false);
-        setParsedPreview([]);
-        setStatusMessage(`Successfully imported ${parsedPreview.length} statement transactions.`);
-        setTimeout(() => setStatusMessage(null), 5000);
-      } else {
-        const errorData = await res.json();
-        setImportErrors([errorData.error || 'Failed to import transactions']);
-      }
-    } catch (err) {
-      setImportErrors([err instanceof Error ? err.message : 'Failed to import transactions']);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
+export default function Transactions() {
+  const router = useRouter();
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">
-              Bank & UPI Transaction Ledger
-            </h1>
-            <p className="text-xs sm:text-sm text-text-secondary mt-1">
-              Complete cashflow, UPI QR merchant collections, and bank debits synchronized for GST reconciliation.
-            </p>
+    <div data-appearance="light">
+      <div className="bg-background text-foreground min-h-screen">
+        <aside className="bg-sidebar text-sidebar-foreground border-y border-r border-border flex fixed inset-y-0 left-0 px-4 py-5 flex-col w-64">
+          <div className="flex px-3 items-center h-8">
+            <span className="font-semibold text-foreground text-lg tracking-[0.18em]">
+              DIGITAX
+            </span>
           </div>
-
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setShowImportModal(true)}
-            className="shadow-xs"
-          >
-            <UploadCloud className="h-4 w-4 mr-1.5" />
-            Import Bank Statement (CSV)
-          </Button>
-        </div>
-
-        {/* Search & Filter Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-text-tertiary" />
-            <Input
-              placeholder="Search narration, ref, or UPI ID..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-9 text-xs"
-            />
+          <button className="text-left rounded-md bg-card text-foreground text-sm border border-border flex mt-6 px-3 justify-between items-center w-full h-11">
+            <span className="flex items-center gap-2 min-w-0">
+              <Building2 className="text-muted-foreground shrink-0 size-4" />
+              <span className="text-ellipsis whitespace-nowrap overflow-hidden">
+                Aster Labs Pvt. Ltd.
+              </span>
+            </span>
+            <ChevronsUpDown className="text-muted-foreground shrink-0 size-4" />
+          </button>
+          <nav className="flex mt-7 flex-col flex-1 gap-1">
+            <Link
+              href="/dashboard"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <LayoutDashboard className="size-4" />
+              <span>Overview</span>
+            </Link>
+            <Link
+              href="/transactions"
+              className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center gap-3 h-10"
+            >
+              <ArrowLeftRight className="size-4" />
+              <span>Transactions</span>
+            </Link>
+            <Link
+              href="/gst"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <ReceiptText className="size-4" />
+              <span>{`GST & Tax`}</span>
+            </Link>
+            <Link
+              href="/banking"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <Landmark className="size-4" />
+              <span>Banking</span>
+            </Link>
+            <Link
+              href="/reports"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <BarChart3 className="size-4" />
+              <span>Reports</span>
+            </Link>
+            <Link
+              href="/contacts"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <Users className="size-4" />
+              <span>Contacts</span>
+            </Link>
+            <Link
+              href="/settings"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <Settings className="size-4" />
+              <span>Settings</span>
+            </Link>
+          </nav>
+          <div className="border-x border-t border-b flex pt-4 flex-col gap-2">
+            <Link
+              href="/dashboard"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <CircleHelp className="size-4" />
+              <span>{`Help & support`}</span>
+            </Link>
+            <button className="text-left rounded-md flex px-3 py-2 items-center gap-3 hover:bg-accent active:bg-muted hover:active:bg-muted">
+              <span className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center shrink-0 size-8">
+                AK
+              </span>
+              <span className="min-w-0">
+                <span className="font-medium text-ellipsis whitespace-nowrap text-foreground text-sm block overflow-hidden">
+                  Ananya Kapoor
+                </span>
+                <span className="text-ellipsis whitespace-nowrap text-muted-foreground text-xs block overflow-hidden">
+                  Admin
+                </span>
+              </span>
+              <MoreHorizontal className="text-muted-foreground ml-auto shrink-0 size-4" />
+            </button>
           </div>
-
-          <div className="flex items-center gap-1.5 self-start sm:self-auto">
-            <Button
-              variant={filterType === 'all' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilterType('all')}
-              className="text-xs h-8"
-            >
-              All Records ({transactions.length})
-            </Button>
-            <Button
-              variant={filterType === 'credit' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilterType('credit')}
-              className="text-xs h-8"
-            >
-              Credits (Sales)
-            </Button>
-            <Button
-              variant={filterType === 'debit' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilterType('debit')}
-              className="text-xs h-8"
-            >
-              Debits (Payments)
-            </Button>
-            <Button
-              variant={filterType === 'unmatched' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setFilterType('unmatched')}
-              className="text-xs h-8 text-amber-700 dark:text-amber-400"
-            >
-              Unmatched ({transactions.filter((t) => t.reconciliation_status === 'unmatched').length})
-            </Button>
-          </div>
-        </div>
-
-        {/* Transactions Table */}
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-surface-secondary text-text-secondary uppercase border-b border-border">
-                  <tr>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Narration & Reference</th>
-                    <th className="px-4 py-3">Account / Source</th>
-                    <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3 text-right">Amount (₹)</th>
-                    <th className="px-4 py-3 text-right">Reconciliation</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredTxns.map((txn) => {
-                    const isCredit = txn.transaction_type === 'credit';
-                    return (
-                      <tr key={txn.id} className="hover:bg-surface-tertiary/50 transition-colors">
-                        <td className="px-4 py-3 font-mono text-text-secondary whitespace-nowrap">
-                          {txn.transaction_date}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-text-primary">
-                            {txn.description}
-                          </div>
-                          <div className="font-mono text-[11px] text-text-tertiary">
-                            Ref: {txn.reference_number || 'N/A'} {txn.upi_id ? `• UPI: ${txn.upi_id}` : ''}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-text-secondary">
-                          {txn.bank_account_name || 'Bank Account'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-0.5 rounded-md bg-surface-secondary border border-border text-[11px] font-medium text-text-secondary">
-                            {txn.category || 'Uncategorized'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right font-bold whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center gap-1 ${
-                              isCredit ? 'text-emerald-600' : 'text-text-primary'
-                            }`}
-                          >
-                            {isCredit ? (
-                              <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600" />
-                            ) : (
-                              <ArrowUpRight className="h-3.5 w-3.5 text-text-tertiary" />
-                            )}
-                            {formatINR(txn.amount)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <Badge
-                            variant={
-                              txn.reconciliation_status === 'matched'
-                                ? 'success'
-                                : txn.reconciliation_status === 'partial'
-                                ? 'accent'
-                                : 'outline'
-                            }
-                          >
-                            {txn.reconciliation_status === 'matched' ? 'Reconciled' : 'Unmatched'}
-                          </Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        </aside>
+        <div className="ml-64 min-h-screen">
+          <header className="bg-background border-t border-r border-b border-b-border border-l-border flex fixed z-10 top-0 right-0 left-64 px-8 justify-between items-center h-16">
+            <div className="text-sm flex items-center gap-2">
+              <span className="text-muted-foreground">DIGITAX</span>
+              <ChevronRight className="text-muted-foreground size-4" />
+              <span className="font-medium text-foreground">
+                Transactions
+              </span>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Real CSV Import Modal */}
-        {showImportModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
-            <Card className="max-w-xl w-full shadow-2xl border-border">
-              <CardHeader className="border-b border-border pb-3">
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <FileSpreadsheet className="h-5 w-5 text-primary-600" />
-                  Import Bank / UPI Statement CSV
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Upload standard bank export statements (HDFC, SBI, ICICI, Axis, PhonePe, Paytm QR).
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 space-y-4 text-xs">
-                {importErrors.length > 0 && (
-                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300">
-                    {importErrors.map((err, i) => (
-                      <div key={i}>{err}</div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="p-4 rounded-xl border-2 border-dashed border-border text-center space-y-2 bg-surface-secondary/40 relative">
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={handleFileUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <UploadCloud className="h-8 w-8 text-primary-600 mx-auto" />
-                  <div className="font-semibold text-text-primary">
-                    {isParsing ? 'Parsing statement CSV...' : 'Click to select CSV file, or drag & drop'}
-                  </div>
-                  <div className="text-[11px] text-text-tertiary">
-                    Parses dates, narrations, debits, credits, and UTR reference codes automatically
-                  </div>
-                </div>
-
-                {parsedPreview.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between font-bold text-text-primary">
-                      <span>Statement Preview ({parsedPreview.length} rows found)</span>
-                      <span className="text-[11px] font-normal text-text-secondary">Ready to import</span>
-                    </div>
-                    <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
-                      {parsedPreview.slice(0, 15).map((row, idx) => (
-                        <div key={idx} className="p-2 flex items-center justify-between text-[11px] hover:bg-surface-secondary">
-                          <div>
-                            <span className="font-mono text-text-tertiary mr-2">{row.transaction_date}</span>
-                            <span className="font-medium text-text-primary">{row.description}</span>
-                          </div>
-                          <span className={`font-mono font-semibold ${row.direction === 'credit' ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {row.direction === 'credit' ? '+' : '-'}₹{row.amount}
+            <div className="flex items-center gap-4">
+              <label className="rounded-md bg-card border border-border flex px-3 items-center gap-2 w-64 h-9">
+                <Search className="text-muted-foreground size-4" />
+                <input
+                  type="search"
+                  placeholder="Search"
+                  defaultValue=""
+                  className="bg-transparent text-foreground text-sm outline-none w-full placeholder:text-muted-foreground"
+                />
+              </label>
+              <button
+                aria-label="Notifications"
+                className="rounded-md text-muted-foreground flex justify-center items-center size-9 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              >
+                <Bell className="size-4" />
+              </button>
+              <button
+                aria-label="Open profile"
+                className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center size-8"
+              >
+                AK
+              </button>
+            </div>
+          </header>
+          <main className="px-8 pt-24 pb-8">
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="font-semibold text-2xl tracking-tight">
+                  Transactions
+                </h1>
+                <p className="text-muted-foreground text-sm mt-2">
+                  Review, categorize, and reconcile every business movement.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  className="h-9"
+                  onClick={() => router.push('/expense-capture')}
+                >
+                  Add transaction
+                </Button>
+                <Button variant="secondary" className="h-9">
+                  Import
+                </Button>
+              </div>
+            </div>
+            <div className="rounded-md bg-card border border-border flex mt-8 p-3 items-center gap-3">
+              <label className="rounded-md bg-background border border-input flex px-3 items-center gap-2 h-9 min-w-72">
+                <Search className="text-muted-foreground size-4" />
+                <input
+                  type="search"
+                  placeholder="Search by merchant or amount"
+                  defaultValue=""
+                  className="bg-transparent text-sm outline-none w-full placeholder:text-muted-foreground"
+                />
+              </label>
+              <Select defaultValue="all">
+                <SelectTrigger className="w-48 h-9">
+                  <SelectValue placeholder="All accounts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All accounts</SelectItem>
+                  <SelectItem value="icici">ICICI Current Account</SelectItem>
+                  <SelectItem value="hdfc">HDFC Current Account</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select defaultValue="all">
+                <SelectTrigger className="w-44 h-9">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  <SelectItem value="sales">Sales</SelectItem>
+                  <SelectItem value="software">{`Software & subscriptions`}</SelectItem>
+                  <SelectItem value="rent">Rent</SelectItem>
+                  <SelectItem value="taxes">Taxes</SelectItem>
+                  <SelectItem value="refunds">Refunds</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select defaultValue="jun-2024">
+                <SelectTrigger className="w-36 h-9">
+                  <SelectValue placeholder="Jun 2024" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="jun-2024">Jun 2024</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="secondary" className="ml-auto gap-2 h-9">
+                <SlidersHorizontal className="size-4" />
+                Filters
+              </Button>
+            </div>
+            <Card className="mt-6 overflow-hidden">
+              <div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Account</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-12" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="text-sm">24 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="rounded-md bg-primary/10 text-primary flex justify-center items-center size-8"
+                            onClick={() => router.push('/invoice-details')}
+                          >
+                            <ArrowDownToLine className="size-4" />
+                          </span>
+                          <span className="font-medium">
+                            Razorpay settlement
                           </span>
                         </div>
-                      ))}
-                    </div>
+                      </TableCell>
+                      <TableCell>Sales</TableCell>
+                      <TableCell>HDFC Current</TableCell>
+                      <TableCell className="font-medium text-right text-primary">
+                        +₹86,400
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-primary/10 text-primary">
+                          Matched
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-sm">23 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-muted text-muted-foreground flex justify-center items-center size-8">
+                            <ArrowUpFromLine className="size-4" />
+                          </span>
+                          <span
+                            className="font-medium"
+                            onClick={() => router.push('/expense-capture')}
+                          >
+                            AWS India
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{`Software & subscriptions`}</TableCell>
+                      <TableCell>ICICI Current</TableCell>
+                      <TableCell className="font-medium text-right">
+                        -₹42,180
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className="text-destructive border-destructive/50"
+                        >
+                          Needs review
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-sm">21 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-muted text-muted-foreground flex justify-center items-center size-8">
+                            <ArrowUpFromLine className="size-4" />
+                          </span>
+                          <span
+                            className="font-medium"
+                            onClick={() => router.push('/invoice-details')}
+                          >
+                            Office lease
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>Rent</TableCell>
+                      <TableCell>ICICI Current</TableCell>
+                      <TableCell className="font-medium text-right">
+                        -₹1,20,000
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-primary/10 text-primary">
+                          Matched
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-sm">20 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-muted text-muted-foreground flex justify-center items-center size-8">
+                            <ArrowUpFromLine className="size-4" />
+                          </span>
+                          <span className="font-medium">TDS payment</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>Taxes</TableCell>
+                      <TableCell>ICICI Current</TableCell>
+                      <TableCell className="font-medium text-right">
+                        -₹18,500
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-primary/10 text-primary">
+                          Matched
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-sm">19 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-muted text-muted-foreground flex justify-center items-center size-8">
+                            <ArrowUpFromLine className="size-4" />
+                          </span>
+                          <span className="font-medium">
+                            Zoho Corporation
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{`Software & subscriptions`}</TableCell>
+                      <TableCell>HDFC Current</TableCell>
+                      <TableCell className="font-medium text-right">
+                        -₹8,400
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className="text-destructive border-destructive/50"
+                        >
+                          Needs review
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-sm">18 Jun</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-primary/10 text-primary flex justify-center items-center size-8">
+                            <RotateCcw className="size-4" />
+                          </span>
+                          <span
+                            className="font-medium"
+                            onClick={() => router.push('/invoice-details')}
+                          >
+                            Client refund
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>Refunds</TableCell>
+                      <TableCell>ICICI Current</TableCell>
+                      <TableCell className="font-medium text-right">
+                        -₹12,300
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-accent text-accent-foreground">
+                          Categorized
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          aria-label="More options"
+                          className="rounded-md text-muted-foreground flex justify-center items-center size-8 hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+                <div className="border-x border-t border-b flex px-6 py-4 justify-between items-center">
+                  <span className="text-muted-foreground text-sm">
+                    Showing 1–6 of 248 transactions
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button className="p-0 size-8">1</Button>
+                    <Button className="p-0 size-8">2</Button>
+                    <Button className="p-0 size-8">3</Button>
+                    <Button variant="ghost" className="px-3 gap-1 h-8">
+                      Next
+                      <ChevronRight className="size-4" />
+                    </Button>
                   </div>
-                )}
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                  <Button variant="ghost" size="sm" onClick={() => setShowImportModal(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={handleConfirmImport}
-                    disabled={parsedPreview.length === 0}
-                    isLoading={isSubmitting}
-                  >
-                    Confirm Import ({parsedPreview.length} Transactions)
-                  </Button>
+                  <span className="text-muted-foreground text-xs">
+                    Sample data
+                  </span>
                 </div>
-              </CardContent>
+              </div>
             </Card>
-          </div>
-        )}
+          </main>
+        </div>
       </div>
-    </DashboardLayout>
+    </div>
   );
 }

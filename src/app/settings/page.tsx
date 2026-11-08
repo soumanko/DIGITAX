@@ -1,326 +1,367 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { DEMO_SHOP } from '@/lib/demo-data';
-import { createClient } from '@/lib/supabase/client';
-import { gstinSchema } from '@/lib/validation/schemas';
+import React from 'react';
+import Link from 'next/link';
 import {
-  Settings,
-  Store,
-  ShieldCheck,
-  CheckCircle2,
-  Globe2,
-  Key,
-  LogOut,
-  Save,
-  AlertTriangle,
-  AlertCircle
+  ArrowLeftRight,
+  BarChart3,
+  Bell,
+  Building2,
+  ChevronRight,
+  ChevronsUpDown,
+  CircleHelp,
+  Landmark,
+  LayoutDashboard,
+  MoreHorizontal,
+  ReceiptText,
+  Search,
+  Users,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 
-export default function SettingsPage() {
-  const router = useRouter();
-  const [shopName, setShopName] = useState(DEMO_SHOP.name);
-  const [gstin, setGstin] = useState(DEMO_SHOP.gstin || '');
-  const [businessType, setBusinessType] = useState(DEMO_SHOP.business_type || '');
-  const [city, setCity] = useState(DEMO_SHOP.city || '');
-  const [scheme, setScheme] = useState<'regular' | 'composition_goods' | 'qrmp'>('regular');
-  const [language, setLanguage] = useState<'en' | 'hi' | 'bn' | 'mr'>('en');
-  const [savedSuccess, setSavedSuccess] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [gstinError, setGstinError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadShop() {
-      try {
-        const res = await fetch('/api/shops');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.shop) {
-            if (data.shop.name) setShopName(data.shop.name);
-            if (data.shop.gstin) setGstin(data.shop.gstin);
-            if (data.shop.business_type) setBusinessType(data.shop.business_type);
-            if (data.shop.city) setCity(data.shop.city);
-            if (data.shop.taxpayer_scheme) setScheme(data.shop.taxpayer_scheme);
-            if (data.shop.preferred_language) setLanguage(data.shop.preferred_language);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('Could not load shop from API:', err);
-      }
-
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('digitax_active_shop');
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (parsed.name) setShopName(parsed.name);
-            if (parsed.gstin) setGstin(parsed.gstin);
-            if (parsed.business_type) setBusinessType(parsed.business_type);
-            if (parsed.city) setCity(parsed.city);
-            if (parsed.taxpayer_scheme) setScheme(parsed.taxpayer_scheme);
-            if (parsed.preferred_language) setLanguage(parsed.preferred_language);
-          } catch (e) {}
-        }
-      }
-    }
-    loadShop();
-  }, []);
-
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setSaveError(null);
-    setSavedSuccess(false);
-
-    // Validate GSTIN if provided (DIGITAX-013)
-    if (gstin && gstin.trim() !== '') {
-      try {
-        gstinSchema.parse(gstin);
-        setGstinError(null);
-      } catch {
-        setGstinError('Invalid GSTIN format. Expected 15-character alphanumeric (e.g., 27AABCS1429B1ZB).');
-        setIsSaving(false);
-        return;
-      }
-    } else {
-      setGstinError(null);
-    }
-
-    const updated = {
-      ...DEMO_SHOP,
-      name: shopName,
-      gstin: gstin || null,
-      business_type: businessType,
-      city,
-      taxpayer_scheme: scheme,
-      preferred_language: language,
-    };
-
-    try {
-      const res = await fetch('/api/shops', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Save failed' }));
-        setSaveError(errorData.error || 'Failed to save shop settings');
-        setIsSaving(false);
-        return;
-      }
-
-      const data = await res.json();
-
-      if (typeof window !== 'undefined' && data.shop) {
-        localStorage.setItem('digitax_active_shop', JSON.stringify(data.shop));
-      }
-
-      setIsSaving(false);
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 2500);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Network error saving shop settings');
-      setIsSaving(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.warn('Sign out notice:', err);
-    }
-    document.cookie = 'dx_demo_session=; path=/; max-age=0;';
-    router.push('/login');
-  };
-
+export default function Settings() {
   return (
-    <DashboardLayout>
-      <div className="space-y-6 max-w-4xl">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-text-primary tracking-tight flex items-center gap-2">
-              <Settings className="h-6 w-6 text-primary-600" />
-              Shop Settings & Tax Profile
-            </h1>
-            <p className="text-xs sm:text-sm text-text-secondary mt-1">
-              Manage your business registration, taxpayer scheme, and Indic voice assistant preferences.
-            </p>
+    <div data-appearance="light">
+      <div className="bg-background text-foreground w-full h-fit min-h-screen w-screen min-w-screen max-w-screen overflow-visible">
+        <aside className="bg-sidebar text-sidebar-foreground border-y border-r border-border flex fixed inset-y-0 left-0 px-4 py-5 flex-col w-64">
+          <div className="flex px-3 items-center h-8">
+            <span className="font-semibold text-foreground text-lg tracking-[0.18em]">
+              DIGITAX
+            </span>
           </div>
-
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleSignOut}
-            className="text-xs shadow-xs"
-          >
-            <LogOut className="h-3.5 w-3.5 mr-1.5" />
-            Sign Out of Shop
-          </Button>
+          <button className="text-left rounded-md bg-card text-foreground text-sm border border-border flex mt-6 px-3 justify-between items-center w-full h-11">
+            <span className="flex items-center gap-2 min-w-0">
+              <Building2 className="text-muted-foreground shrink-0 size-4" />
+              <span className="text-ellipsis whitespace-nowrap overflow-hidden">
+                Aster Labs Pvt. Ltd.
+              </span>
+            </span>
+            <ChevronsUpDown className="text-muted-foreground shrink-0 size-4" />
+          </button>
+          <nav className="flex mt-7 flex-col flex-1 gap-1">
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/dashboard'}
+            >
+              <LayoutDashboard className="size-4" />
+              <span>Overview</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/transactions'}
+            >
+              <ArrowLeftRight className="size-4" />
+              <span>Transactions</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/gst'}
+            >
+              <ReceiptText className="size-4" />
+              <span>{`GST & Tax`}</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/banking'}
+            >
+              <Landmark className="size-4" />
+              <span>Banking</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/reports'}
+            >
+              <BarChart3 className="size-4" />
+              <span>Reports</span>
+            </a>
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              onClick={() => window.location.href='/contacts'}
+            >
+              <Users className="size-4" />
+              <span>Contacts</span>
+            </a>
+            <a
+              href="#"
+              className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center gap-3 h-10"
+            >
+              <svg className="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span>Settings</span>
+            </a>
+          </nav>
+          <div className="border-x border-t border-b flex pt-4 flex-col gap-2">
+            <a
+              href="#"
+              className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+            >
+              <CircleHelp className="size-4" />
+              <span>{`Help & support`}</span>
+            </a>
+            <button className="text-left rounded-md flex px-3 py-2 items-center gap-3 hover:bg-accent active:bg-muted hover:active:bg-muted">
+              <span className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center shrink-0 size-8">
+                AK
+              </span>
+              <span className="min-w-0">
+                <span className="font-medium text-ellipsis whitespace-nowrap text-foreground text-sm block overflow-hidden">
+                  Ananya Kapoor
+                </span>
+                <span className="text-ellipsis whitespace-nowrap text-muted-foreground text-xs block overflow-hidden">
+                  Admin
+                </span>
+              </span>
+              <MoreHorizontal className="text-muted-foreground ml-auto shrink-0 size-4" />
+            </button>
+          </div>
+        </aside>
+        <div className="ml-64 min-h-screen">
+          <header className="bg-background border-t border-r border-b border-b-border border-l-border flex fixed z-10 top-0 right-0 left-64 px-8 justify-between items-center h-16">
+            <div className="text-sm flex items-center gap-2">
+              <span className="text-muted-foreground">DIGITAX</span>
+              <ChevronRight className="text-muted-foreground size-4" />
+              <span className="font-medium text-foreground">Settings</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="rounded-md bg-card border border-border flex px-3 items-center gap-2 w-64 h-9">
+                <Search className="text-muted-foreground size-4" />
+                <input
+                  type="search"
+                  placeholder="Search"
+                  defaultValue=""
+                  className="bg-transparent text-foreground text-sm outline-none w-full placeholder:text-muted-foreground"
+                />
+              </label>
+              <button
+                aria-label="Notifications"
+                className="rounded-md text-muted-foreground flex justify-center items-center size-9 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+              >
+                <Bell className="size-4" />
+              </button>
+              <button
+                aria-label="Open profile"
+                className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center size-8"
+              >
+                AK
+              </button>
+            </div>
+          </header>
+          <main className="px-8 pt-24 pb-12">
+            <div className="max-w-6xl">
+              <div className="mb-8">
+                <h1 className="font-semibold text-foreground text-2xl tracking-tight">
+                  Settings
+                </h1>
+                <p className="text-muted-foreground text-sm mt-2">
+                  Control your workspace, team, and financial preferences.
+                </p>
+              </div>
+              <div className="grid items-start gap-8 grid-cols-[220px_minmax(0,1fr)]">
+                <Card className="rounded-lg">
+                  <CardContent className="flex p-2 flex-col gap-1">
+                    <a
+                      href="#"
+                      className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center h-10"
+                    >
+                      Workspace
+                    </a>
+                    <a
+                      href="#"
+                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                    >{`Team & permissions`}</a>
+                    <a
+                      href="#"
+                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                    >
+                      Notifications
+                    </a>
+                    <a
+                      href="#"
+                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                    >
+                      Integrations
+                    </a>
+                    <a
+                      href="#"
+                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                    >
+                      Billing
+                    </a>
+                  </CardContent>
+                </Card>
+                <div className="flex flex-col gap-6">
+                  <Card className="rounded-lg">
+                    <CardHeader>
+                      <CardTitle>Workspace details</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-6">
+                      <div className="grid gap-6 grid-cols-2">
+                        <div className="flex flex-col gap-2">
+                          <label
+                            htmlFor="business-name"
+                            className="font-medium text-sm"
+                          >
+                            Business name
+                          </label>
+                          <Input
+                            id="business-name"
+                            defaultValue="Aster Labs Pvt. Ltd."
+                            className="focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label
+                            htmlFor="legal-name"
+                            className="font-medium text-sm"
+                          >
+                            Legal name
+                          </label>
+                          <Input
+                            id="legal-name"
+                            defaultValue="Aster Labs Private Limited"
+                            className="focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label
+                            htmlFor="gstin"
+                            className="font-medium text-sm"
+                          >
+                            GSTIN
+                          </label>
+                          <Input
+                            id="gstin"
+                            defaultValue="27AABCU9603R1ZV"
+                            className="focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label htmlFor="pan" className="font-medium text-sm">
+                            PAN
+                          </label>
+                          <Input
+                            id="pan"
+                            defaultValue="AABCU9603R"
+                            className="focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2 col-span-2">
+                          <label
+                            htmlFor="registered-address"
+                            className="font-medium text-sm"
+                          >
+                            Registered address
+                          </label>
+                          <Input
+                            id="registered-address"
+                            defaultValue="Bandra Kurla Complex, Mumbai, Maharashtra 400051"
+                            className="focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                      </div>
+                      <div className="border-x border-t border-b flex pt-6 justify-end items-center gap-3">
+                        <Button variant="secondary">Discard</Button>
+                        <Button>Save changes</Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="rounded-lg">
+                    <CardHeader>
+                      <CardTitle>Financial preferences</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-6">
+                      <div className="grid gap-6 grid-cols-2">
+                        <div className="flex flex-col gap-2">
+                          <label className="font-medium text-sm">
+                            Financial year
+                          </label>
+                          <Select defaultValue="FY 2024–25">
+                            <SelectTrigger className="focus:ring-2 focus:ring-ring">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="FY 2024–25">
+                                FY 2024–25
+                              </SelectItem>
+                              <SelectItem value="FY 2023–24">
+                                FY 2023–24
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <label className="font-medium text-sm">
+                            Base currency
+                          </label>
+                          <Select defaultValue="INR — Indian Rupee">
+                            <SelectTrigger className="focus:ring-2 focus:ring-ring">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="INR — Indian Rupee">
+                                INR — Indian Rupee
+                              </SelectItem>
+                              <SelectItem value="USD — US Dollar">
+                                USD — US Dollar
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="border-x border-t border-b flex pt-6 justify-between items-center">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium text-sm">
+                            Lock closed months
+                          </span>
+                          <span className="text-muted-foreground text-sm">
+                            Prevent edits to transactions in closed accounting
+                            months.
+                          </span>
+                        </div>
+                        <Switch defaultChecked={false} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="rounded-lg border-destructive/40">
+                    <CardHeader>
+                      <CardTitle>Danger zone</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex justify-between items-center gap-6">
+                      <p className="text-muted-foreground text-sm">
+                        Disconnecting your workspace removes bank sync access.
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        Disconnect workspace
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          </main>
         </div>
-
-        {savedSuccess && (
-          <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2 animate-fade-in">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-            <strong>Settings Saved:</strong> Shop profile and GST configurations updated successfully.
-          </div>
-        )}
-        {saveError && (
-          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-300 flex items-center gap-2 animate-fade-in">
-            <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
-            <strong>Save Failed:</strong> {saveError}
-          </div>
-        )}
-
-        <form onSubmit={handleSave} className="space-y-6">
-          {/* Business & GST Profile */}
-          <Card>
-            <CardHeader className="pb-3 border-b border-border bg-surface-secondary/40">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Store className="h-4 w-4 text-primary-600" />
-                Business & GSTIN Identity
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-text-secondary mb-1">
-                    Business / Shop Name
-                  </label>
-                  <Input
-                    value={shopName}
-                    onChange={(e) => setShopName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-text-secondary mb-1">
-                    15-Digit GSTIN
-                  </label>
-                  <Input
-                    value={gstin}
-                    onChange={(e) => {
-                      setGstin(e.target.value.toUpperCase());
-                      setGstinError(null);
-                    }}
-                    className="font-mono uppercase"
-                    maxLength={15}
-                    error={gstinError || undefined}
-                  />
-                  {gstinError && (
-                    <p id="gstin-error" className="text-xs text-error-600" role="alert">
-                      {gstinError}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-text-secondary mb-1">
-                    Business Category
-                  </label>
-                  <Input
-                    value={businessType}
-                    onChange={(e) => setBusinessType(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-text-secondary mb-1">
-                    City / Town
-                  </label>
-                  <Input
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-text-secondary mb-1">
-                  Taxpayer Scheme
-                </label>
-                <select
-                  value={scheme}
-                  onChange={(e) => setScheme(e.target.value as 'regular' | 'composition_goods' | 'qrmp')}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-primary focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="regular">Regular Scheme (Monthly GSTR-1 & 3B, Full ITC)</option>
-                  <option value="composition_goods">Composition Scheme (1% flat tax, CMP-08 quarterly)</option>
-                  <option value="qrmp">QRMP Scheme (Quarterly Return Monthly Payment)</option>
-                </select>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Assistant & Language Preferences */}
-          <Card>
-            <CardHeader className="pb-3 border-b border-border bg-surface-secondary/40">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Globe2 className="h-4 w-4 text-primary-600" />
-                Language & Voice Configuration (GNANI EVON / TIMBRE)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-text-secondary mb-1">
-                  Default Language for Voice Assistant
-                </label>
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value as 'en' | 'hi' | 'bn' | 'mr')}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-primary focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="hi">हिंदी (Hindi)</option>
-                  <option value="en">English (Indian)</option>
-                  <option value="mr">मराठी (Marathi)</option>
-                  <option value="bn">বাংলা (Bengali)</option>
-                </select>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Security & Isolation */}
-          <Card>
-            <CardHeader className="pb-3 border-b border-border bg-surface-secondary/40">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                Data Security & Tenant Isolation
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 text-xs text-text-secondary space-y-2">
-              <p>
-                All documents and bank ledgers for <strong>{shopName}</strong> are protected with Supabase Row Level Security (RLS) policies. Only authenticated team members assigned to this shop tenant have access.
-              </p>
-              <div className="flex items-center gap-1.5 text-emerald-600 font-semibold pt-1">
-                <CheckCircle2 className="h-4 w-4" />
-                Multi-Tenant Isolation Enforced at Database Engine Level
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end">
-            <Button type="submit" variant="primary" className="text-xs shadow-md">
-              <Save className="h-3.5 w-3.5 mr-1.5" />
-              Save All Changes
-            </Button>
-          </div>
-        </form>
       </div>
-    </DashboardLayout>
+    </div>
   );
 }
+
