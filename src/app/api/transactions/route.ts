@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ZodError } from 'zod';
 import { getAuthenticatedContext, getShopTransactionsServer, importTransactionsBatchServer } from '@/lib/supabase/server-db';
-import { DEMO_TRANSACTIONS } from '@/lib/demo-data';
+import { importTransactionsSchema } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 import { csrfMiddleware } from '@/lib/security/csrf';
 
 export async function GET(request: NextRequest) {
   try {
-    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
-    const isDev = process.env.NODE_ENV !== 'production';
-
     const ctx = await getAuthenticatedContext();
 
     if (!ctx.userId) {
-      if (isDemoCookie && isDev) {
-        return NextResponse.json({ transactions: DEMO_TRANSACTIONS, isDemo: true });
-      }
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,11 +17,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No active business shop found' }, { status: 404 });
     }
 
+    // Rate limit reads: 100 per minute per shop (relaxed)
+    const rateLimit = rateLimiters.relaxed(`transactions-read:${ctx.shop.id}`);
+    const limitResponse = rateLimitResponse(rateLimit);
+    if (limitResponse.blocked) {
+      return limitResponse.response as Response;
+    }
+
     const transactions = await getShopTransactionsServer(ctx.shop.id);
     return NextResponse.json({ transactions, isDemo: false });
   } catch (err) {
     console.error('Error fetching transactions:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -51,25 +53,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { transactions } = body;
+    const validated = importTransactionsSchema.parse(body);
 
-    if (!Array.isArray(transactions) || transactions.length === 0) {
-      return NextResponse.json({ error: 'transactions must be a non-empty array' }, { status: 400 });
-    }
-
-    // Basic validation of fields
-    for (const t of transactions) {
-      if (!t.transaction_date || !t.amount || !t.direction || !t.description) {
-        return NextResponse.json({
-          error: 'Each transaction must include transaction_date, amount, direction, and description',
-        }, { status: 400 });
-      }
-    }
-
-    const imported = await importTransactionsBatchServer(ctx.shop.id, ctx.userId, transactions);
+    const imported = await importTransactionsBatchServer(ctx.shop.id, ctx.userId, validated.transactions);
     return NextResponse.json({ transactions: imported, count: imported.length, success: true }, { status: 201 });
   } catch (err) {
+    if (err instanceof ZodError) {
+      return NextResponse.json({ error: 'Validation failed', details: err.issues }, { status: 400 });
+    }
     console.error('Error importing transactions:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to import transactions' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to import transactions' }, { status: 500 });
   }
 }

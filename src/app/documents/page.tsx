@@ -8,8 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { useTheme } from '@/lib/theme-provider';
 import { escapeHtml } from '@/lib/security/xss-sanitizer';
+import { useToast } from '@/components/ui/toast';
 import { Document } from '@/types';
 import {
   UploadCloud,
@@ -50,13 +50,12 @@ function DocumentTypeIcon({ type, className }: { type: string; className?: strin
 }
 
 export default function DocumentsPage() {
-  const { resolvedTheme } = useTheme();
+  const { showToast } = useToast();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  [resolvedTheme];
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -121,9 +120,46 @@ export default function DocumentsPage() {
       const res = await fetch(`/api/documents?id=${docId}`, { method: 'DELETE' });
       if (res.ok) {
         loadDocuments();
+        showToast({ type: 'success', title: 'Document deleted' });
+      } else {
+        showToast({ type: 'error', title: 'Delete failed', description: 'The document could not be deleted. Please try again.' });
       }
     } catch {
-      // Error handled silently
+      showToast({ type: 'error', title: 'Delete failed', description: 'Network error deleting document.' });
+    }
+  }
+
+  const ALLOWED_UPLOAD_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+  const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10MB
+
+  async function handleUpload(file: File) {
+    // Client-side MIME + size validation (mirrors server rules)
+    if (!ALLOWED_UPLOAD_MIME.includes(file.type)) {
+      showToast({ type: 'error', title: 'Unsupported file type', description: 'Allowed: PDF, JPEG, PNG, WEBP, HEIC, HEIF (max 10 MB).' });
+      return;
+    }
+    if (file.size > MAX_UPLOAD_SIZE) {
+      showToast({ type: 'error', title: 'File too large', description: 'Documents must be 10 MB or smaller.' });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('document_type', 'other');
+      const res = await fetch('/api/documents', { method: 'POST', body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast({ type: 'error', title: 'Upload failed', description: data.error || `The server rejected the upload (HTTP ${res.status}).` });
+        return;
+      }
+      showToast({ type: 'success', title: 'Document uploaded', description: 'Stored securely in your private business vault.' });
+      await loadDocuments();
+    } catch {
+      showToast({ type: 'error', title: 'Upload failed', description: 'Network error uploading document.' });
+    } finally {
+      setIsUploading(false);
     }
   }
 
@@ -162,7 +198,7 @@ export default function DocumentsPage() {
                   </>
                 )}
               </Button>
-              <input id="file-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif" />
+              <input id="file-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif" onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUpload(file); e.target.value = ''; }} />
             </div>
           }
         />

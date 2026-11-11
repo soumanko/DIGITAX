@@ -73,9 +73,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Shop not found' }, { status: 404 });
     }
 
-    if (!shop.is_active) {
-      return NextResponse.json({ error: 'Shop is not active' }, { status: 403 });
-    }
+    // NOTE: there is no `shops.is_active` column in the schema; membership
+    // (owner or shop_members row) is the authorization boundary. The RLS-aware
+    // select above already guarantees the caller can read this shop only if
+    // they are authorized.
 
     const response = NextResponse.json({
       success: true,
@@ -123,6 +124,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Validation failed', details: err.issues }, { status: 400 });
     }
     console.error('Error switching shop:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

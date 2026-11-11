@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching reconciliation history:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     console.error('Error fetching reconciliation history:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -160,6 +160,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true, message: 'Reconciliation match removed' });
   } catch (err) {
     console.error('Error unmatching reconciliation:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

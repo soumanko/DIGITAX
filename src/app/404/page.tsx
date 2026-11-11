@@ -24,30 +24,30 @@ export default function DIGITAX404() {
               aria-label="Primary navigation"
               className="flex items-center gap-7"
             >
-              <a
-                href="#product"
+              <Link
+                href="/#product"
                 className="font-medium text-foreground text-sm hover:text-primary"
               >
                 Product
-              </a>
-              <a
-                href="#gst-compliance"
+              </Link>
+              <Link
+                href="/#gst-compliance"
                 className="font-medium text-foreground text-sm hover:text-primary"
               >
                 GST compliance
-              </a>
-              <a
-                href="#pricing"
+              </Link>
+              <Link
+                href="/#pricing"
                 className="font-medium text-foreground text-sm hover:text-primary"
               >
                 Pricing
-              </a>
-              <a
-                href="#resources"
+              </Link>
+              <Link
+                href="/#resources"
                 className="font-medium text-foreground text-sm hover:text-primary"
               >
                 Resources
-              </a>
+              </Link>
             </nav>
             <div className="flex items-center gap-3">
               <a
@@ -57,7 +57,7 @@ export default function DIGITAX404() {
                 Sign in
               </a>
               <a
-                href="/get-started"
+                href="/register"
                 className="font-semibold rounded-md bg-primary text-primary-foreground text-sm px-4 py-2 hover:bg-primary/90"
               >
                 Get started
@@ -99,7 +99,7 @@ export default function DIGITAX404() {
           <p className="text-muted-foreground text-sm mt-8">
             Need a hand?
             <a
-              href="/contact-support"
+              href="/faq"
               className="font-medium text-primary hover:underline"
             >
               Contact support

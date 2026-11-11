@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle2, Eye, Globe2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Eye, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,6 +24,7 @@ export default function DIGITAXSignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +33,7 @@ export default function DIGITAXSignIn() {
 
     try {
       const supabase = createClient();
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -47,6 +48,41 @@ export default function DIGITAXSignIn() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication service is unavailable.');
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (googleLoading) return;
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      const supabase = createClient();
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          // The PKCE code lands back on /auth/confirm, which exchanges it for
+          // a real session and then continues to /dashboard.
+          redirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent('/dashboard')}`,
+        },
+      });
+
+      if (oauthError) {
+        console.error('Google sign-in failed to start:', oauthError.message);
+        setError(
+          'Google sign-in could not be started. This usually means Google is not enabled for this workspace yet — please continue with your email and password.'
+        );
+        setGoogleLoading(false);
+        return;
+      }
+      if (!data?.url) {
+        setError('Google sign-in returned no redirect. Please continue with your email and password.');
+        setGoogleLoading(false);
+      }
+      // On success the browser is redirected by Supabase OAuth; keep the
+      // button in its loading state until then.
+    } catch {
+      setError('Google sign-in is unavailable right now. Please continue with your email and password.');
+      setGoogleLoading(false);
     }
   };
 
@@ -213,8 +249,19 @@ export default function DIGITAXSignIn() {
                   <span className="text-muted-foreground text-sm">or</span>
                   <div className="bg-border grow shrink h-px basis-[0%]" />
                 </div>
-                <Button variant="outline" className="w-full" onClick={() => router.push('/dashboard')}>
-                  <Globe2 className="mr-2 size-4" />
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleGoogleSignIn}
+                  isLoading={googleLoading}
+                  disabled={googleLoading}
+                >
+                  <svg className="mr-2 size-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47a5.57 5.57 0 0 1-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82Z" />
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3a7.25 7.25 0 0 1-10.71-3.81H1.38v3.09A11.99 11.99 0 0 0 12 24Z" />
+                    <path fill="#FBBC05" d="M5.36 14.28a7.22 7.22 0 0 1 0-4.56V6.63H1.38a11.98 11.98 0 0 0 0 10.74l3.98-3.09Z" />
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42A11.47 11.47 0 0 0 12 0 11.99 11.99 0 0 0 1.38 6.63l3.98 3.09A7.23 7.23 0 0 1 12 4.75Z" />
+                  </svg>
                   Continue with Google
                 </Button>
               </CardContent>
@@ -230,11 +277,11 @@ export default function DIGITAXSignIn() {
             </div>
             <p className="text-center text-muted-foreground text-xs mt-8">
               By continuing, you agree to the
-              <a href="/terms" className="underline hover:text-foreground">
+              <a href="/security" className="underline hover:text-foreground">
                 Terms
               </a>
               and
-              <a href="/privacy" className="underline hover:text-foreground">
+              <a href="/security" className="underline hover:text-foreground">
                 Privacy Policy
               </a>
               .

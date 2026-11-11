@@ -4,19 +4,12 @@ import { getAuthenticatedContext, createShopWithMembership } from '@/lib/supabas
 import { createShopSchema } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 import { csrfMiddleware } from '@/lib/security/csrf';
-import { DEMO_SHOP } from '@/lib/demo-data';
 
 export async function GET(request: NextRequest) {
   try {
-    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
-    const isDev = process.env.NODE_ENV !== 'production';
-
     const ctx = await getAuthenticatedContext();
 
     if (!ctx.userId) {
-      if (isDemoCookie && isDev) {
-        return NextResponse.json({ shop: DEMO_SHOP, isDemo: true });
-      }
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -28,7 +21,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ shop: ctx.shop, isDemo: false });
   } catch (err) {
     console.error('Error fetching shop:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -73,6 +66,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Validation failed', details: (err as ZodError).issues }, { status: 400 });
     }
     console.error('Error creating shop:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to create business shop' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create business shop' }, { status: 500 });
   }
 }

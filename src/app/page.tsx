@@ -13,7 +13,6 @@ import {
   ThumbsUp,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import {
@@ -98,11 +97,13 @@ export default function DIGITAXLanding() {
                   businesses.
                 </p>
                 <div className="flex mt-8 items-center gap-3">
-                  <Button className="px-6 h-11">Start free</Button>
-                  <Button variant="outline" className="px-6 gap-2 h-11">
+                  <Link href="/register" className="font-medium rounded-md bg-primary text-primary-foreground text-sm px-6 h-11 inline-flex items-center hover:bg-primary/90">
+                    Start free
+                  </Link>
+                  <Link href="/how-it-works" className="font-medium rounded-md border border-border text-foreground text-sm px-6 h-11 inline-flex items-center gap-2 hover:bg-accent">
                     See how it works
                     <ArrowRight className="size-4" />
-                  </Button>
+                  </Link>
                 </div>
                 <p className="text-muted-foreground text-sm mt-4">
                   No credit card required · Set up in 10 minutes

@@ -53,7 +53,27 @@ export async function getAuthenticatedContext(requestedShopId?: string | null): 
 
   const { data: shops, error: shopError } = await shopQuery;
 
-  if (shopError || !shops || shops.length === 0) {
+  let activeShop: DbShop | null = null;
+
+  if (!shopError && shops && shops.length > 0) {
+    activeShop = shops[0] as DbShop;
+  } else if (effectiveShopId) {
+    // A requested/cookie shop that this user cannot see (stale cookie after
+    // logout/login, revoked membership, etc.) must NEVER produce an empty or
+    // foreign context. Fall back to the user's own latest authorized shop —
+    // RLS guarantees the result can only be one of the user's businesses.
+    const { data: ownShops, error: ownError } = await supabase
+      .from('shops')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (!ownError && ownShops && ownShops.length > 0) {
+      activeShop = ownShops[0] as DbShop;
+    }
+  }
+
+  if (!activeShop) {
     return {
       userId: user.id,
       isDemo: false,
@@ -61,8 +81,6 @@ export async function getAuthenticatedContext(requestedShopId?: string | null): 
       userRole: '',
     };
   }
-
-  const activeShop = shops[0] as DbShop;
 
   // Verify membership if user is not the direct owner
   let membershipRole: string | null = null;

@@ -31,14 +31,14 @@ export async function GET() {
         role,
         shops (
           id, name, gstin, state, state_code, business_type, taxpayer_scheme,
-          preferred_language, created_at, is_active
+          preferred_language, created_at
         )
       `)
       .eq('user_id', ctx.userId);
 
     if (error) {
       console.error('Error fetching shop memberships:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     const shops = (memberships || []).map((m: { shops: Array<Record<string, unknown>>; role: string }) => {
@@ -54,6 +54,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error('Error fetching shop list:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedContext } from '@/lib/supabase/server-db';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
@@ -31,11 +32,26 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient();
 
+  // MFA challenge: the FACTOR id (from enrollment) must be supplied by the
+  // client — a user id is not a factor id and can never start a challenge.
+  let factorId: string | undefined;
+  try {
+    const body = await request.json();
+    const parsed = z.object({ factorId: z.string().uuid() }).safeParse(body ?? {});
+    if (parsed.success) factorId = parsed.data.factorId;
+  } catch {
+    // Empty body -> factorId stays undefined
+  }
+
+  if (!factorId) {
+    return NextResponse.json({ error: 'A valid enrolled factorId (UUID) is required' }, { status: 400 });
+  }
+
   const { data, error } = await (supabase.auth.mfa as unknown as { challenge: (params: { factorId: string }) => Promise<{ data: { challengeId: string } | null; error: Error | null }> }).challenge({
-    factorId: ctx.userId,
+    factorId,
   });
 
-  if (error) {
+  if (error || !data?.challengeId) {
     console.error('MFA challenge error:', error);
     return NextResponse.json({ error: 'Failed to create challenge' }, { status: 500 });
   }

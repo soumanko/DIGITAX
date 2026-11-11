@@ -3,22 +3,15 @@ import { ZodError } from 'zod';
 import { getAuthenticatedContext, createInvoiceServer } from '@/lib/supabase/server-db';
 import { createClient } from '@/lib/supabase/server';
 import { confirmInvoiceSchema } from '@/lib/validation/schemas';
-import { DEMO_INVOICES } from '@/lib/demo-data';
 import { money, roundMoney } from '@/lib/decimal';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 import { csrfMiddleware } from '@/lib/security/csrf';
 
 export async function GET(request: NextRequest) {
   try {
-    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
-    const isDev = process.env.NODE_ENV !== 'production';
-
     const ctx = await getAuthenticatedContext();
 
     if (!ctx.userId) {
-      if (isDemoCookie && isDev) {
-        return NextResponse.json({ invoices: DEMO_INVOICES, isDemo: true });
-      }
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -81,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching invoices:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -94,7 +87,7 @@ export async function GET(request: NextRequest) {
     }, { status: 200 });
   } catch (err) {
     console.error('Error fetching invoices:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -160,6 +153,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Validation failed', details: (err as ZodError).issues }, { status: 400 });
     }
     console.error('Error creating invoice:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to create invoice' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
   }
 }

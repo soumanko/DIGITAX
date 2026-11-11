@@ -44,13 +44,13 @@ const INDIAN_STATES = [
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [isGstRegistered, setIsGstRegistered] = useState(true);
-  const [gstin, setGstin] = useState('27AABCS1429B1ZB');
-  const [businessName, setBusinessName] = useState('Shree Krishna Traders');
-  const [businessType, setBusinessType] = useState('Kirana & FMCG Retail');
-  const [stateCode, setStateCode] = useState('27');
-  const [city, setCity] = useState('Mumbai');
-  const [pincode, setPincode] = useState('400001');
+  const [isGstRegistered, setIsGstRegistered] = useState(false);
+  const [gstin, setGstin] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [businessType, setBusinessType] = useState('');
+  const [stateCode, setStateCode] = useState('');
+  const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
   const [taxpayerScheme, setTaxpayerScheme] = useState<'regular' | 'composition_goods' | 'qrmp'>('regular');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +94,7 @@ export default function OnboardingPage() {
       state_code: stateCode,
       state: stateObj?.name || 'Maharashtra',
       city,
-      pincode,
+      ...(pincode ? { pincode } : {}),
       taxpayer_scheme: taxpayerScheme,
     };
 
@@ -108,15 +108,6 @@ export default function OnboardingPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        // If unauthenticated or demo session in dev, fall back gracefully to local dev preview
-        if (res.status === 401 && typeof window !== 'undefined') {
-          const isDemo = document.cookie.includes('dx_demo_session=true');
-          if (isDemo) {
-            localStorage.setItem('digitax_active_shop', JSON.stringify({ ...shopPayload, id: 'shop-demo-001', onboarding_completed: true }));
-            router.push('/dashboard');
-            return;
-          }
-        }
         setError(data.error || 'Failed to save shop profile. Please verify your inputs.');
         setLoading(false);
         return;
@@ -223,10 +214,14 @@ export default function OnboardingPage() {
                   Business Category
                 </label>
                 <select
-                  value={businessType}
+                  value={businessType || ''}
                   onChange={(e) => setBusinessType(e.target.value)}
+                  required
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                 >
+                  <option value="" disabled>
+                    Select a business category
+                  </option>
                   <option value="Kirana & FMCG Retail">Kirana & FMCG Retail</option>
                   <option value="Supermarket / Departmental">Supermarket / Departmental</option>
                   <option value="Hardware & Sanitaryware">Hardware & Electricals</option>
@@ -245,10 +240,14 @@ export default function OnboardingPage() {
                     State / Union Territory
                   </label>
                   <select
-                    value={stateCode}
+                    value={stateCode || ''}
                     onChange={(e) => setStateCode(e.target.value)}
+                    required
                     className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                   >
+                    <option value="" disabled>
+                      Select your state
+                    </option>
                     {INDIAN_STATES.map((s) => (
                       <option key={s.code} value={s.code}>
                         {s.code} - {s.name}

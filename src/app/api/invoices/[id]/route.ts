@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import { getAuthenticatedContext, getShopInvoicesServer, logAuditEventServer } from '@/lib/supabase/server-db';
 import { createClient } from '@/lib/supabase/server';
-import { confirmInvoiceSchema, updateTransactionSchema } from '@/lib/validation/schemas';
+import { confirmInvoiceSchema } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 import { money, roundMoney, validateInvoiceArithmetic } from '@/lib/decimal';
 import { csrfMiddleware } from '@/lib/security/csrf';
+
+/** Review-state-only update payload (PATCH). */
+const reviewStateUpdateSchema = z.object({
+  review_state: z.enum(['draft', 'pending_review', 'confirmed', 'corrected', 'rejected', 'needs_clarification', 'approved']),
+});
 
 /**
  * GET /api/invoices/[id]
@@ -26,6 +31,13 @@ export async function GET(
 
     const supabase = await createClient();
 
+    // Rate limit invoice reads: 100 per minute per shop (relaxed)
+    const rateLimit = rateLimiters.relaxed(`invoice-read:${ctx.shop.id}`);
+    const limitResponse = rateLimitResponse(rateLimit);
+    if (limitResponse.blocked) {
+      return limitResponse.response as Response;
+    }
+
     const { data: invoice, error } = await supabase
       .from('invoices')
       .select('*, invoice_items(*)')
@@ -38,7 +50,7 @@ export async function GET(
         return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
       }
       console.error('Error fetching invoice:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     if (!invoice) {
@@ -48,7 +60,105 @@ export async function GET(
     return NextResponse.json({ invoice }, { status: 200 });
   } catch (err) {
     console.error('Error fetching invoice:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/invoices/[id]
+ * Update ONLY the review state of an invoice (human verification workflow).
+ * Enforces a state machine: confirmation/approval is only allowed from
+ * reviewable states, so OCR-extracted records can never be silently marked
+ * as confirmed from an unknown or already-finalized state.
+ * All transitions are audit logged — this is the persistence layer behind
+ * the human-review confirmation flow (creates an immutable audit_events row).
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const ctx = await getAuthenticatedContext();
+    if (!ctx.userId || !ctx.shop) {
+      return NextResponse.json({ error: 'Authentication and active shop required' }, { status: 401 });
+    }
+
+    // Rate limit review actions: 30 per minute per shop (moderate)
+    const rateLimit = rateLimiters.moderate(`invoice-review:${ctx.shop.id}`);
+    const limitResponse = rateLimitResponse(rateLimit);
+    if (limitResponse.blocked) {
+      return limitResponse.response as Response;
+    }
+
+    // CSRF protection
+    const csrfResult = csrfMiddleware(request);
+    if (!csrfResult.valid) {
+      return csrfResult.response as Response;
+    }
+
+    const { id: invoiceId } = await params;
+
+    const supabase = await createClient();
+
+    const { data: existingInvoice, error: fetchError } = await supabase
+      .from('invoices')
+      .select('id, invoice_number, review_state, status, total_amount')
+      .eq('id', invoiceId)
+      .eq('shop_id', ctx.shop.id)
+      .single();
+
+    if (fetchError || !existingInvoice) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const { review_state } = reviewStateUpdateSchema.parse(body);
+
+    // State machine: finalized states can only be reached from reviewable states.
+    const reviewableStates = ['draft', 'pending_review', 'needs_clarification', 'corrected'];
+    if (review_state === 'confirmed' || review_state === 'approved') {
+      if (!reviewableStates.includes(existingInvoice.review_state)) {
+        return NextResponse.json({
+          error: `Invoice cannot be marked '${review_state}' from review state '${existingInvoice.review_state}'`,
+        }, { status: 400 });
+      }
+    }
+
+    const { data: updatedInvoice, error: updateError } = await supabase
+      .from('invoices')
+      .update({ review_state, status: review_state })
+      .eq('id', invoiceId)
+      .eq('shop_id', ctx.shop.id)
+      .select()
+      .single();
+
+    if (updateError || !updatedInvoice) {
+      console.error('Error updating invoice review state:', updateError);
+      return NextResponse.json({ error: 'Failed to update invoice review state' }, { status: 500 });
+    }
+
+    // Immutable audit event for the human verification action
+    await logAuditEventServer({
+      shopId: ctx.shop.id,
+      actorId: ctx.userId,
+      action: 'invoice_review_state_changed',
+      entityType: 'invoice',
+      entityId: invoiceId,
+      metadata: {
+        invoice_number: existingInvoice.invoice_number,
+        total_amount: existingInvoice.total_amount,
+        from_review_state: existingInvoice.review_state,
+        to_review_state: review_state,
+      },
+    });
+
+    return NextResponse.json({ invoice: updatedInvoice, success: true }, { status: 200 });
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return NextResponse.json({ error: 'Validation failed', details: err.issues }, { status: 400 });
+    }
+    console.error('Error updating invoice review state:', err);
+    return NextResponse.json({ error: 'Failed to update invoice review state' }, { status: 500 });
   }
 }
 
@@ -161,7 +271,7 @@ export async function PUT(
 
     if (updateError) {
       console.error('Error updating invoice:', updateError);
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to update invoice' }, { status: 500 });
     }
 
     // Update line items — delete existing and re-insert
@@ -187,7 +297,7 @@ export async function PUT(
       const { error: lineError } = await supabase.from('invoice_items').insert(lines);
       if (lineError) {
         console.error('Error updating invoice line items:', lineError);
-        return NextResponse.json({ error: lineError.message }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to update invoice line items' }, { status: 500 });
       }
     }
 
@@ -211,7 +321,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Validation failed', details: (err as ZodError).issues }, { status: 400 });
     }
     console.error('Error updating invoice:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to update invoice' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update invoice' }, { status: 500 });
   }
 }
 
@@ -280,7 +390,7 @@ export async function DELETE(
 
     if (deleteError) {
       console.error('Error deleting invoice:', deleteError);
-      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to delete invoice' }, { status: 500 });
     }
 
     // Log audit event
@@ -300,6 +410,6 @@ export async function DELETE(
     return NextResponse.json({ success: true, message: 'Invoice deleted' }, { status: 200 });
   } catch (err) {
     console.error('Error deleting invoice:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to delete invoice' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to delete invoice' }, { status: 500 });
   }
 }

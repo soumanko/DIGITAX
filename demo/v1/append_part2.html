@@ -1,0 +1,151 @@
+    <!-- Scene 3: GST Workspace -->
+    <section class="scene gst" data-scene="3">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">Export</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Navigation</div>
+              <div class="sb-items">
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M3 12v5l2 2m0 0l7 7 7-7M3 12V7l2-2"/></svg><span>Dashboard</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-3v4c0 6-4 10-10 10H2c-6 0-10-4-10-10V2c0-6 4-10 10-10h3v4c0 6 4 10 10 10s10-4 10-10V3c0-6-4-10-10-10"/></svg><span>Transactions</span></a></div>
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>GST</span><span class="count">2</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="9"/><line x1="12" y1="20" x2="12" y2="13"/><line x1="6" y1="20" x2="6" y2="2z"/></svg><span>Reconciliation</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>GST Workspace</h1>
+                  <p class="desc">File GSTR-1 and GSTR-3B with confidence</p>
+                </div>
+                <div class="actions">
+                  <button class="btn">Generate Summary</button>
+                </div>
+              </div>
+              <div class="segmented">
+                <button class="seg-btn on">GSTR-3B</button>
+                <button class="seg-btn">GSTR-1</button>
+              </div>
+              <div class="metric-grid">
+                <div class="metric-card">
+                  <div class="metric-label">Net Tax Payable</div>
+                  <div class="metric-value">₹2,84,760</div>
+                  <div class="metric-desc">CGST + SGST + IGST</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Outward Supplies</div>
+                  <div class="metric-value">₹18,42,600</div>
+                  <div class="metric-desc">GSTR-1 reported</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Input Tax Credit</div>
+                  <div class="metric-value">₹1,45,300</div>
+                  <div class="metric-desc">Available ITC</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Due Date</div>
+                  <div class="metric-value">20 Nov 2026</div>
+                  <div class="metric-desc">GSTR-3B filing</div>
+                </div>
+              </div>
+              <div class="gst-table">
+                <table class="financial-table">
+                  <thead>
+                    <tr><th>Party</th><th>GSTIN</th><th>Type</th><th>Taxable</th><th>CGST</th><th>SGST</th><th>Status</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Shree Krishna Traders</td><td class="font-mono text-sm">27AABCS1429B1ZB</td><td>Sales</td><td>₹24,366</td><td>₹2,193</td><td>₹2,193</td><td><span class="status-badge confirmed">Confirmed</span></td></tr>
+                    <tr><td>AWS India</td><td class="font-mono text-sm">27AAICA1234A1Z5</td><td>Purchase</td><td>₹42,180</td><td>₹3,796</td><td>₹3,796</td><td><span class="status-badge pending_review">Pending Review</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 4: Transactions -->
+    <section class="scene transactions" data-scene="4">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">Import Statement</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Navigation</div>
+              <div class="sb-items">
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M3 12v5l2 2m0 0l7 7 7-7M3 12V7l2-2"/></svg><span>Dashboard</span></a></div>
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-3v4c0 6-4 10-10 10H2c-6 0-10-4-10-10V2c0-6 4-10 10-10h3v4c0 6 4 10 10 10s10-4 10-10V3c0-6-4-10-10-10"/></svg><span>Transactions</span><span class="count">3</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>GST</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="9"/><line x1="12" y1="20" x2="12" y2="13"/><line x1="6" y1="20" x2="6" y2="2z"/></svg><span>Reconciliation</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>Banking Transactions</h1>
+                  <p class="desc">Reconcile bank transactions with invoices</p>
+                </div>
+                <div class="actions">
+                  <button class="btn">Import Statement</button>
+                </div>
+              </div>
+              <div class="balance-strip">
+                <div class="balance-item">
+                  <div class="balance-label">Total Balance</div>
+                  <div class="balance-value">₹9,68,410</div>
+                  <div class="balance-sub">ICICI Current Account</div>
+                </div>
+                <div class="balance-item">
+                  <div class="balance-label">Unmatched</div>
+                  <div class="balance-value">23</div>
+                  <div class="balance-sub">Pending reconciliation</div>
+                </div>
+                <div class="balance-item">
+                  <div class="balance-label">Matched Today</div>
+                  <div class="balance-value">12</div>
+                  <div class="balance-sub">Auto-matched</div>
+                </div>
+              </div>
+              <div class="txn-table">
+                <table class="financial-table">
+                  <thead><tr><th>Date</th><th>Description</th><th>Reference</th><th>Debit</th><th>Credit</th><th>Status</th></tr></thead>
+                  <tbody>
+                    <tr><td class="font-mono text-sm">20 Oct 2026</td><td>Shree Krishna Traders</td><td class="font-mono text-sm">UPI/INV-2026-1042</td><td>—</td><td class="text-right">₹24,366</td><td><span class="status-badge matched">Matched</span></td></tr>
+                    <tr><td class="font-mono text-sm">21 Oct 2026</td><td>AWS India</td><td class="font-mono text-sm">NEFT/AWS-001</td><td class="text-right">₹42,180</td><td>—</td><td><span class="status-badge matched">Matched</span></td></tr>
+                    <tr><td class="font-mono text-sm">22 Oct 2026</td><td>Zomato Swiggy</td><td class="font-mono text-sm">UPI/ZOM-442</td><td class="text-right">₹1,850</td><td>—</td><td><span class="status-badge unmatched">Unmatched</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>

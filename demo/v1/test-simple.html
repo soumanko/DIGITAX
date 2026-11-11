@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Test</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: system-ui, sans-serif; background: #0a0f1a; color: #f8fafc; }
+#stage { position: relative; width: 1920px; height: 1080px; background: #0a0f1a; overflow: hidden; }
+#viewport { position: relative; width: 100%; height: 100%; background: #0a0f1a; overflow: hidden; }
+#cursor { position: absolute; width: 22px; height: 22px; z-index: 60; pointer-events: none; opacity: 0; transition: transform 1s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.3s ease; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35)); }
+#ripple { position: absolute; z-index: 59; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 2px solid #2563eb; opacity: 0; pointer-events: none; }
+#ripple.go { animation: rip 0.5s ease-out; }
+@keyframes rip { from { opacity: 0.9; transform: scale(0.25); } to { opacity: 0; transform: scale(1.15); } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="viewport">
+    <div style="font-size: 48px; font-weight: 700; color: #f8fafc; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">DIGITAX</div>
+  </div>
+  <div id="ripple"></div>
+  <svg id="cursor" viewBox="0 0 24 24"><path d="M5 2l7.5 18.5 2.6-7.4 7.4-2.6z" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div id="replay">
+    <button class="btn">Replay demo</button>
+    <div class="hint">Or press R</div>
+  </div>
+</div>
+<script>
+const $ = (s, root = document) => root.querySelector(s);
+const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const FORMAT = '16:10';
+const STAGE = { '16:10': { w: 1280, h: 800, scale: 1 } }['16:10'];
+const W = STAGE.w, H = STAGE.h;
+const stageEl = document.getElementById('stage');
+stageEl.style.width = W + 'px';
+stageEl.style.height = H + 'px';
+function fit() { const s = Math.min(window.innerWidth / W, window.innerHeight / H); stageEl.style.transform = `scale(${s})`; }
+addEventListener('resize', fit); fit();
+const CAPTIONS = { style: 'pill', steps: 3 };
+const URLS = { 0: 'app.digitax.in', 1: 'app.digitax.in', 2: 'app.digitax.in' };
+const scenes = $$('.scene');
+function scene(n) { scenes.forEach((s) => { s.classList.toggle('on', +s.dataset.scene === n); s.style.transform = ''; }); const cur = CAPTIONS.style === 'rail' ? document.querySelector('.rail-dots i:nth-child(' + n + ')') : null; const urlEl = document.getElementById('url'); if (urlEl) urlEl.textContent = URLS[n]; }
+const cursor = document.getElementById('cursor');
+const ripple = document.getElementById('ripple');
+let cx = W / 2, cy = H - 100;
+function place(x, y, ms = 900) { cx = x; cy = y; cursor.style.transitionDuration = ms + 'ms'; cursor.style.transform = `translate(${x}px, ${y}px)`; }
+async function reveal(el) { const main = el.closest('.main'); if (!main) return; const r = el.getBoundingClientRect(); const m = main.getBoundingClientRect(); if (r.top > m.top + 80 && r.bottom < m.bottom - 80) return; const f = v.width / main.offsetWidth; main.scrollTo({ top: main.scrollTop + ((r.top - m.top) - m.height / 2 + r.height / 2) / f, behavior: 'smooth' }); await wait(750); }
+async function moveTo(sel, ms = 900) { const el = typeof sel === 'string' ? $(sel) : sel; await reveal(el); const vp = document.getElementById('viewport').getBoundingClientRect(); const r = el.getBoundingClientRect(); const scale = vp.width / W; cursor.style.opacity = 1; place((r.left + r.width / 2 - vp.left) / scale - 2, (r.top + r.height / 2 - vp.top) / scale - 2, ms); await wait(ms + 80); }
+async function click(sel) { const el = typeof sel === 'string' ? $(sel) : el; ripple.style.left = cx + 2 + 'px'; ripple.style.top = cy + 2 + 'px'; ripple.classList.remove('go'); void ripple.offsetWidth; ripple.classList.add('go'); if (el) { el.classList.add('pressed'); await wait(130); el.classList.remove('pressed'); } await wait(220); }
+async function tap(sel, ms = 900) { await moveTo(sel, ms); await click(sel); }
+let cam = { x: 0, y: 0, k: 1 };
+async function zoom(sel, k = 1.6, ms = 900) { const s = document.querySelector('.scene.on'); const sw = s.offsetWidth, sh = s.offsetHeight; let x = 0, y = 0; if (sel) { const el = typeof sel === 'string' ? $(sel) : sel; await reveal(el); const vp = document.getElementById('viewport').getBoundingClientRect(), r = el.getBoundingClientRect(), f = vp.width / W; const ex = ((r.left + r.width / 2 - vp.left) / f - cam.x) / cam.k; const ey = ((r.top + r.height / 2 - vp.top) / f - cam.y) / cam.k; x = Math.min(0, Math.max(sw - sw * k, sw / 2 - ex * k)); y = Math.min(0, Math.max(sh - sh * k, sh / 2 - ey * k)); } else k = 1; if (+cursor.style.opacity) place(x + (cx + 2 - cam.x) / cam.k * k - 2, y + (cy + 2 - cam.y) / cam.k * k - 2, ms); s.style.transformOrigin = '0 0'; s.style.transition = `transform ${ms}ms cubic-bezier(.22,.61,.36,1)`; s.style.transform = k === 1 ? '' : `translate(${x}px, ${y}px) scale(${k})`; cam = { x, y, k }; await wait(ms + 80); s.style.transition = ''; }
+const CAP = {};
+const capPad = (n) => (n < 10 ? '0' : '') + n;
+let capStep = 0;
+(function initCaptions() { const vp = document.getElementById('viewport'); const mk = (cls, html, parent = vp) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; parent.appendChild(d); return d; }; document.getElementById('stage').dataset.captions = CAPTIONS.style; if (CAPTIONS.style === 'pill' || CAPTIONS.style === 'coach') CAP.pill = mk('cap cap-pill', '<span class="dot"></span><span class="t"></span>'); if (CAPTIONS.style === 'lower-third') { CAP.lt = mk('cap cap-lt', '<div class="lt-idx"></div><div class="lt-txt"></div>'); CAP.prog = mk('cap-prog', '<i></i>'); } if (CAPTIONS.style === 'rail') { CAP.rail = mk('railband', '<span class="rail-dots">' + '<i></i>'.repeat(CAPTIONS.steps) + '</span>' + '<span class="rail-body"><span class="rail-txt"></span></span>' + '<span class="rail-idx"></span>', document.getElementById('stage')); } if (CAPTIONS.style === 'coach') { CAP.ring = mk('coach-ring', ''); CAP.coach = mk('cap cap-coach', '<span class="step"></span><span class="t"></span><span class="arrow"></span>'); } })();
+function say(text, opts = {}) { capStep = opts.step ?? capStep + 1; const idx = `${capPad(capStep)} / ${capPad(CAPTIONS.steps)}`; if (CAPTIONS.style === 'lower-third') { document.querySelector('.lt-idx', CAP.lt).textContent = `Step ${idx}`; document.querySelector('.lt-txt', CAP.lt).textContent = text; CAP.lt.classList.add('on'); document.querySelector('.cap-prog i', CAP.lt).style.width = Math.min(100, (capStep / CAPTIONS.steps) * 100) + '%'; return; } if (CAPTIONS.style === 'rail') { const t = document.querySelector('.rail-txt', CAP.rail); t.classList.remove('on'); t.textContent = text; document.querySelector('.rail-idx', CAP.rail).textContent = idx; document.querySelectorAll('.rail-dots i', CAP.rail).forEach((d, i) => { d.classList.toggle('done', i < capStep - 1); d.classList.toggle('now', i === capStep - 1); }); requestAnimationFrame(() => t.classList.add('on')); return; } if (CAPTIONS.style === 'coach' && opts.at && $(opts.at)) { coachAt($(opts.at), text, idx); return; } document.querySelector('.t', CAP.pill).textContent = text; CAP.pill.classList.add('on'); }
+function hush() { if (CAPTIONS.style === 'rail') { document.querySelector('.rail-txt', CAP.rail).classList.remove('on'); return; } ['pill', 'lt', 'coach', 'ring'].forEach((k) => CAP[k] && CAP[k].classList.remove('on')); }
+async function coachAt(el, text, idx) { const v = document.getElementById('viewport').getBoundingClientRect(), f = v.width / W; const b = el.getBoundingClientRect(); const r = { width: b.width / f, height: b.height / f }; const x = (b.left - v.left) / f, y = (b.top - v.top) / f, pad = 6; document.getElementById('CAP.ring').style.cssText = `left:${x - pad}px;top:${y - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px`; document.querySelector('.step', CAP.coach).textContent = `Step ${idx}`; document.querySelector('.t', CAP.coach).textContent = text; const cw = CAP.coach.offsetWidth, ch = CAP.coach.offsetHeight; const below = y + r.height + 16 + ch < v.height / f - 16; const left = Math.max(24, Math.min(x + r.width > W / 2 ? x + r.width - cw : x, W - cw - 24)); CAP.coach.classList.toggle('below', below); CAP.coach.classList.toggle('above', !below); CAP.coach.style.left = left + 'px'; CAP.coach.style.top = (below ? y + r.height + 16 : y - ch - 16) + 'px'; document.querySelector('.arrow', CAP.coach).style.left = Math.min(Math.max(x + r.width / 2 - left - 6, 16), cw - 28) + 'px'; CAP.ring.classList.add('on'); CAP.coach.classList.add('on'); }
+async function type(el, text, ms = 45) { el.classList.remove('ph'); el.textContent = ''; for (const ch of text) { el.textContent += ch; await wait(ms); } }
+async function play() {
+  scene(0);
+  await wait(2800);
+  scene(1);
+  hideCursor(); place(W / 2, H - 80, 0);
+  await wait(600);
+  say('Your books, finally in sync.');
+  await wait(2000);
+  scene(2);
+  await wait(2000);
+  say('DIGITAX — Financial clarity for ambitious teams.');
+  await wait(2000);
+  window.__demoDone = true;
+  if (!new URLSearchParams(location.search).has('record')) document.getElementById('replay').classList.add('on');
+}
+addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'r') location.reload(); });
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => play());
+</script>
+</body>
+</html>

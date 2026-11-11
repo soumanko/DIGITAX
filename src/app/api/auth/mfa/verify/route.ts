@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedContext } from '@/lib/supabase/server-db';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
@@ -31,19 +32,29 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient();
 
+  // Correct Supabase MFA verify semantics: verify() requires the factorId,
+  // the challengeId from mfa.challenge(), and the 6-digit TOTP code. The
+  // previous implementation passed challengeId as factorId — which can never
+  // succeed against a real enrollment.
   const body = await request.json();
-  const { code, challengeId } = body;
+  const verifySchema = z.object({
+    factorId: z.string().uuid(),
+    challengeId: z.string().uuid(),
+    code: z.string().regex(/^\d{6}$/, 'Verification code must be 6 digits'),
+  });
+  const parsed = verifySchema.safeParse(body);
 
-  if (!code || !challengeId) {
-    return NextResponse.json({ error: 'Code and challenge ID are required' }, { status: 400 });
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Valid factorId, challengeId and 6-digit code are required' }, { status: 400 });
   }
 
-  const { data, error } = await (supabase.auth.mfa as unknown as { verify: (params: { factorId: string; code: string }) => Promise<{ data: unknown; error: Error | null }> }).verify({
-    factorId: challengeId,
-    code,
+  const { data, error } = await (supabase.auth.mfa as unknown as { verify: (params: { factorId: string; challengeId: string; code: string }) => Promise<{ data: unknown; error: Error | null }> }).verify({
+    factorId: parsed.data.factorId,
+    challengeId: parsed.data.challengeId,
+    code: parsed.data.code,
   });
 
-  if (error) {
+  if (error || !data) {
     console.error('MFA verification error:', error);
     return NextResponse.json({ error: 'Invalid verification code' }, { status: 400 });
   }

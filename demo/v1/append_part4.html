@@ -1,0 +1,174 @@
+    <!-- Scene 8: GNANI Assistant -->
+    <section class="scene assistant" data-scene="8">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">New Chat</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Assistant</div>
+              <div class="sb-items">
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg><span>GNANI EVON</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>GNANI EVON</h1>
+                  <p class="desc">AI-powered bookkeeping assistant</p>
+                </div>
+                <div class="actions">
+                  <button class="btn ghost">Export Chat</button>
+                </div>
+              </div>
+              <div class="chat-area">
+                <div class="chat-msg bot">
+                  <div class="chat-avatar bot">G</div>
+                  <div class="chat-bubble bot">
+                    <div class="chat-text">Hello! I'm GNANI EVON, your AI bookkeeping assistant. How can I help you today?</div>
+                    <div class="chat-time font-mono text-xs">10:32 AM</div>
+                  </div>
+                </div>
+                <div class="chat-msg user">
+                  <div class="chat-bubble user">
+                    <div class="chat-text">What is my current GST liability?</div>
+                    <div class="chat-time font-mono text-xs">10:33 AM</div>
+                  </div>
+                </div>
+                <div class="chat-msg bot">
+                  <div class="chat-avatar bot">G</div>
+                  <div class="chat-bubble bot">
+                    <div class="chat-text">Based on your October 2026 data, your net GST liability is ₹2,84,760. This includes CGST, SGST, and IGST components. Would you like me to generate a GSTR-3B summary?</div>
+                    <div class="chat-time font-mono text-xs">10:33 AM</div>
+                  </div>
+                </div>
+              </div>
+              <div class="chat-input-area">
+                <input type="text" placeholder="Ask about your books…" class="input chat-input"/>
+                <button class="btn sm primary send-btn">Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 9: Outro -->
+    <section class="scene card-scene outro" data-scene="9">
+      <div class="brandmark">
+        <svg viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h1>DIGITAX<span class="text-primary"> — Financial clarity for ambitious teams.</span></h1>
+      <div class="eyebrow">Get Started Today</div>
+      <div class="actions" style="margin-top: 24px;">
+        <button class="btn primary">Start Free Trial</button>
+        <button class="btn outline">Book a Demo</button>
+      </div>
+      <p class="subtitle" style="margin-top: 20px; max-width: 600px;">DIGITAX — Bookkeeping, GST compliance, banking, and reporting for modern Indian businesses.</p>
+    </section>
+
+  </div>
+  <div id="ripple"></div>
+  <svg id="cursor" viewBox="0 0 24 24"><path d="M5 2l7.5 18.5 2.6-7.4 7.4-2.6z" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div id="replay" style="position:absolute;inset:0;z-index:70;display:none;place-content:center;justify-items:center;gap:14px;background:rgba(10,15,26,0.86);backdrop-filter:blur(3px);">
+    <button class="btn">Replay demo</button>
+    <div class="hint" style="color:#94a3b8;font-size:12px;">Or press R</div>
+  </div>
+</div>
+<script>
+const $ = (s, root = document) => root.querySelector(s);
+const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const STAGE = { '16:10': { w: 1280, h: 800, scale: 1 } }['16:10'];
+const W = STAGE.w, H = STAGE.h;
+const stageEl = document.getElementById('stage');
+stageEl.style.width = W + 'px';
+stageEl.style.height = H + 'px';
+function fit() { const s = Math.min(window.innerWidth / W, window.innerHeight / H); stageEl.style.transform = `scale(${s})`; }
+addEventListener('resize', fit); fit();
+const CAPTIONS = { style: 'pill', steps: 8 };
+const scenes = $$('.scene');
+function scene(n) { scenes.forEach((s) => { s.classList.toggle('on', +s.dataset.scene === n); s.style.transform = ''; }); }
+const cursor = document.getElementById('cursor');
+const ripple = document.getElementById('ripple');
+let cx = W / 2, cy = H - 100;
+function place(x, y, ms = 900) { cx = x; cy = y; cursor.style.transitionDuration = ms + 'ms'; cursor.style.transform = `translate(${x}px, ${y}px)`; }
+async function moveTo(sel, ms = 900) { const el = typeof sel === 'string' ? $(sel) : sel; const vp = document.getElementById('viewport').getBoundingClientRect(); const r = el.getBoundingClientRect(); const scale = vp.width / W; cursor.style.opacity = 1; place((r.left + r.width / 2 - vp.left) / scale - 2, (r.top + r.height / 2 - vp.top) / scale - 2, ms); await wait(ms + 80); }
+async function click(sel) { const el = typeof sel === 'string' ? $(sel) : sel; ripple.style.left = cx + 2 + 'px'; ripple.style.top = cy + 2 + 'px'; ripple.classList.remove('go'); void ripple.offsetWidth; ripple.classList.add('go'); if (el) { el.classList.add('pressed'); await wait(130); el.classList.remove('pressed'); } await wait(220); }
+async function tap(sel, ms = 900) { await moveTo(sel, ms); await click(sel); }
+const CAP = {};
+const capPad = (n) => (n < 10 ? '0' : '') + n;
+let capStep = 0;
+(function initCaptions() { const vp = document.getElementById('viewport'); const mk = (cls, html, parent = vp) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; parent.appendChild(d); return d; }; document.getElementById('stage').dataset.captions = CAPTIONS.style; if (CAPTIONS.style === 'pill' || CAPTIONS.style === 'coach') CAP.pill = mk('cap cap-pill', '<span class="dot"></span><span class="t"></span>'); })();
+function say(text, opts = {}) { capStep = opts.step ?? capStep + 1; document.querySelector('.t', CAP.pill).textContent = text; CAP.pill.classList.add('on'); }
+function hush() { ['pill', 'lt', 'coach', 'ring'].forEach((k) => CAP[k] && CAP[k].classList.remove('on')); }
+async function type(el, text, ms = 45) { el.classList.remove('ph'); el.textContent = ''; for (const ch of text) { el.textContent += ch; await wait(ms); } }
+async function play() {
+  scene(0);
+  await wait(2800);
+  scene(1);
+  place(W / 2, H - 80, 0);
+  await wait(600);
+  say('Sign in to your shop.');
+  await wait(1000);
+  await tap('#email-field', 1000);
+  await type(document.querySelector('#email-field'), 'sara@freshmart.in', 120);
+  await wait(300);
+  await tap('#password-field', 1000);
+  await type(document.querySelector('#password-field'), 'D3m0Tax2026!', 100);
+  await wait(300);
+  await tap('#signin-btn', 1000);
+  hush();
+  await wait(2000);
+  scene(2);
+  await wait(2000);
+  say('Your books, finally in sync.');
+  await wait(2000);
+  scene(3);
+  await wait(2000);
+  say('File GSTR-3B in one click.');
+  await wait(2000);
+  scene(4);
+  await wait(2000);
+  say('Reconcile bank transactions with invoices.');
+  await wait(2000);
+  scene(5);
+  await wait(2000);
+  say('Match transactions to invoices in seconds.');
+  await wait(2000);
+  scene(6);
+  await wait(2000);
+  say('Manage your invoices with ease.');
+  await wait(2000);
+  scene(7);
+  await wait(2000);
+  say('Manage your settings and preferences.');
+  await wait(2000);
+  scene(8);
+  await wait(2000);
+  say('GNANI EVON answers your bookkeeping questions.');
+  await wait(2000);
+  scene(9);
+  await wait(2000);
+  say('DIGITAX — Financial clarity for ambitious teams.');
+  await wait(2000);
+  window.__demoDone = true;
+  if (!new URLSearchParams(location.search).has('record')) document.getElementById('replay').style.display = 'grid';
+}
+addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'r') location.reload(); });
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => play());
+</script>
+</body>
+</html>

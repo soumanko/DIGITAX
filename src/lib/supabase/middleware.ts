@@ -33,24 +33,15 @@ export async function updateSession(request: NextRequest) {
 
   // Refresh session if expired
   let user = null;
-  const isDemoSession = request.cookies.get('dx_demo_session')?.value === 'true';
-  const isDevOrTest = process.env.NODE_ENV !== 'production';
 
   try {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('dummy') && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('demo-digitax')) {
       const { data } = await supabase.auth.getUser();
       user = data.user;
-    } else if (isDemoSession && isDevOrTest) {
-      // Isolated mock user exclusively for local development preview.
-      // This identity is clearly synthetic — never impersonates a real account.
-      user = { id: 'demo-user-local-dev', email: 'demo@digitax.local' } as { id: string; email: string };
     }
   } catch (err) {
     console.warn('Supabase auth session verification failed:', err);
     // Explicitly do not grant access on network or database error
-    if (isDemoSession && isDevOrTest) {
-      user = { id: 'demo-user-local-dev', email: 'demo@digitax.local' } as { id: string; email: string };
-    }
   }
 
   // Protected routes — redirect to login if not authenticated
@@ -63,7 +54,10 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/review') ||
     request.nextUrl.pathname.startsWith('/exports') ||
     request.nextUrl.pathname.startsWith('/settings') ||
-    request.nextUrl.pathname.startsWith('/onboarding');
+    request.nextUrl.pathname.startsWith('/onboarding') ||
+    request.nextUrl.pathname.startsWith('/invoices') ||
+    request.nextUrl.pathname.startsWith('/invoice-details') ||
+    request.nextUrl.pathname.startsWith('/expense-capture');
 
   const isApiRoute = request.nextUrl.pathname.startsWith('/api/') &&
     !request.nextUrl.pathname.startsWith('/api/auth/');

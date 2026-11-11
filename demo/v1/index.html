@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DIGITAX — Your books, finally in sync.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'Inter', 'Noto Sans Devanagari', system-ui, -apple-system, sans-serif; background: #0a0f1a; color: #f8fafc; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+#stage { position: relative; width: 1920px; height: 1080px; background: #0a0f1a; overflow: hidden; }
+#viewport { position: relative; width: 100%; height: 100%; background: #0a0f1a; overflow: hidden; }
+.scene { position: absolute; inset: 0; opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity 0.4s ease, transform 0.4s ease; }
+.scene.on { opacity: 1; visibility: visible; transform: none; }
+#cursor { position: absolute; width: 22px; height: 22px; z-index: 60; pointer-events: none; opacity: 0; transition: transform 1s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.3s ease; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35)); }
+#ripple { position: absolute; z-index: 59; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 2px solid #2563eb; opacity: 0; pointer-events: none; }
+#ripple.go { animation: rip 0.5s ease-out; }
+@keyframes rip { from { opacity: 0.9; transform: scale(0.25); } to { opacity: 0; transform: scale(1.15); } }
+
+.cap { position: absolute; left: 50%; bottom: 28px; transform: translate(-50%, 12px); display: inline-flex; align-items: center; gap: 11px; max-width: 760px; padding: 11px 24px 11px 18px; border-radius: 999px; background: rgba(10, 15, 26, 0.92); box-shadow: 0 12px 32px -12px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12); backdrop-filter: blur(8px) saturate(1.3); color: #fff; font-size: 15px; font-weight: 600; letter-spacing: -0.006em; line-height: 1.35; text-align: center; text-wrap: balance; opacity: 0; transition: opacity 0.3s ease, transform 0.34s cubic-bezier(0.22, 0.61, 0.36, 1); z-index: 55; }
+.cap.on { opacity: 1; transform: translate(-50%, 0); }
+.cap .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: #2563eb; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.28); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: 0.5rem; border: 1px solid transparent; background: #2563eb; color: #fff; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+.btn.outline { background: transparent; color: #f8fafc; border-color: #374151; }
+.btn.primary { background: #1d4ed8; }
+.btn.sm { height: 32px; padding: 0 12px; gap: 6px; font-size: 12.8px; border-radius: 10px; }
+.btn-sm { height: 32px; padding: 0 12px; gap: 6px; font-size: 12.8px; border-radius: 10px; }
+.btn-sm.ghost { background: transparent; color: #f8fafc; border-color: #374151; }
+.btn.ghost { background: transparent; color: #f8fafc; }
+
+.card-scene { height: 100%; display: grid; place-content: center; justify-items: center; gap: 20px; text-align: center; padding: 0 48px; background: radial-gradient(ellipse 55% 60% at 50% -25%, rgba(37, 99, 235, 0.10), transparent 70%), #0a0f1a; }
+.card-scene h1 { font-size: 44px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; max-width: 800px; color: #f8fafc; }
+.card-scene p { font-size: 18px; color: #94a3b8; max-width: 620px; line-height: 1.5; }
+.card-scene .eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #2563eb; margin-bottom: 8px; }
+.card-scene .brandmark { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.card-scene .brandmark span { font-size: 1.5rem; font-weight: 700; color: #f8fafc; }
+.text-primary { color: #2563eb; }
+.subtitle { font-size: 18px; color: #94a3b8; max-width: 620px; line-height: 1.5; }
+
+.glass { width: 420px; background: #111827; border: 1px solid #1f2937; border-radius: 1rem; padding: 32px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); }
+.brand-box { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand-name { font-size: 1.5rem; font-weight: 700; color: #f8fafc; }
+.auth-title { font-size: 1.25rem; font-weight: 600; color: #f8fafc; margin-bottom: 6px; }
+.auth-subtitle { font-size: 0.875rem; color: #94a3b8; margin-bottom: 20px; }
+.input-group { margin-bottom: 16px; }
+.field-label { display: block; font-size: 0.75rem; font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.input-with-icon { position: relative; width: 100%; }
+.input-with-icon input { width: 100%; padding: 10px 12px; border: 1px solid #374151; border-radius: 0.5rem; background: #0b1120; color: #f8fafc; font-size: 14px; }
+.eye-icon { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: #6b7280; }
+.form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; font-size: 0.875rem; color: #94a3b8; }
+.remember-me { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.forgot-link { color: #2563eb; text-decoration: none; font-size: 0.875rem; }
+.btn-primary { width: 100%; height: 40px; border-radius: 0.5rem; background: #1d4ed8; color: #fff; border: none; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 16px; }
+.or-divider { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: #6b7280; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.or-divider::before, .or-divider::after { content: ""; flex: 1; height: 1px; background: #374151; }
+.signup-text { font-size: 0.875rem; color: #94a3b8; text-align: center; }
+.signup-text a { color: #2563eb; text-decoration: none; }
+
+.app-shell { display: flex; flex-direction: column; height: 100%; }
+.topbar { height: 64px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid #1f2937; background: #0a0f1a; }
+.tb-left { display: flex; align-items: center; gap: 12px; }
+.tb-brand { display: flex; align-items: center; gap: 8px; }
+.tb-brand span { font-size: 1rem; font-weight: 700; letter-spacing: -0.011em; color: #f8fafc; }
+.tb-div { height: 16px; width: 1px; background: #1f2937; }
+.tb-right { display: flex; align-items: center; gap: 6px; }
+.body-row { display: flex; flex: 1; overflow: hidden; }
+.sidebar { width: 248px; flex: none; border-right: 1px solid #1f2937; background: #111827; padding: 4px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.sb-section { margin-top: 12px; }
+.sb-label { padding: 0 8px 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; }
+.sb-items { display: flex; flex-direction: column; gap: 2px; }
+.sb-item { position: relative; display: flex; align-items: center; gap: 6px; border-radius: 0.5rem; }
+.sb-item > a { display: flex; flex: 1; align-items: center; gap: 10px; padding: 6px 12px; font-size: 14px; color: #64748b; text-decoration: none; }
+.sb-item.active { background: rgba(37, 99, 235, 0.12); }
+.sb-item.active > a { color: #1d4ed8; }
+.sb-item svg { width: 14px; height: 14px; flex: none; }
+.sb-item .ico { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; color: #64748b; }
+.sb-item.active .ico { color: #1d4ed8; }
+.sb-item .count { border-radius: 999px; padding: 0 8px; font-size: 10px; background: #1f2937; color: #64748b; font-variant-numeric: tabular-nums; }
+.sb-item.active .count { background: rgba(37, 99, 235, 0.15); color: #1d4ed8; }
+.main { position: relative; flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+.main::-webkit-scrollbar { display: none; }
+.main::before { content: ""; position: absolute; inset-inline: 0; top: 0; height: 224px; pointer-events: none; background: radial-gradient(ellipse 55% 60% at 50% -25%, rgba(37, 99, 235, 0.10), transparent 70%); opacity: 0.05; }
+.page { position: relative; margin: 0 auto; width: 100%; max-width: 1152px; padding: 24px; }
+.pagehead { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #1f2937; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.pagehead h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.025em; color: #f8fafc; }
+.pagehead .desc { margin-top: 6px; font-size: 14px; color: #64748b; }
+.pagehead .actions { display: flex; gap: 8px; align-items: center; }
+.segmented { display: flex; gap: 4px; border: 1px solid #374151; background: #111827; border-radius: 999px; padding: 4px; margin-bottom: 24px; }
+.segmented button { flex: 1; border: 0; background: none; border-radius: 999px; padding: 6px 12px; font-family: inherit; font-size: 12px; font-weight: 500; color: #64748b; cursor: pointer; }
+.segmented button.on { background: rgba(37, 99, 235, 0.12); color: #1d4ed8; }
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.kpi-card { border: 1px solid #1f2937; background: #0a0f1a; border-radius: 1.5rem; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+.kpi-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.kpi-label { font-size: 13px; font-weight: 500; color: #64748b; }
+.trend-up { color: #22c55e; font-size: 13px; font-weight: 500; }
+.trend-down { color: #ef4444; font-size: 13px; font-weight: 500; }
+.trend-neutral { color: #94a3b8; font-size: 13px; font-weight: 500; }
+.kpi-value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; color: #f8fafc; margin-bottom: 4px; }
+.kpi-subtitle { font-size: 12px; color: #64748b; }
+.chart-section { margin-bottom: 24px; }
+.chart-card { border: 1px solid #1f2937; background: #0a0f1a; border-radius: 1.5rem; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+.chart-header { margin-bottom: 16px; }
+.chart-title { font-size: 16px; font-weight: 600; color: #f8fafc; margin-bottom: 8px; }
+.chart-period { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #64748b; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+.legend-dot.revenue { background: #2563eb; }
+.legend-dot.expense { background: #ef4444; }
+.chart-container { height: 200px; display: flex; align-items: center; justify-content: center; }
+.balance-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+.balance-item { border: 1px solid #1f2937; background: #0a0f1a; border-radius: 1rem; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+.balance-label { font-size: 13px; font-weight: 500; color: #64748b; margin-bottom: 4px; }
+.balance-value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; color: #f8fafc; margin-bottom: 4px; }
+.balance-sub { font-size: 12px; color: #64748b; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.metric-card { border: 1px solid #1f2937; background: #0a0f1a; border-radius: 1rem; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+.metric-label { font-size: 13px; font-weight: 500; color: #64748b; margin-bottom: 4px; }
+.metric-value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; color: #f8fafc; margin-bottom: 4px; }
+.metric-desc { font-size: 12px; color: #64748b; }
+.financial-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.financial-table th { text-align: left; padding: 12px; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #1f2937; }
+.financial-table td { padding: 12px; border-bottom: 1px solid #1f2937; color: #cbd5e1; }
+.financial-table tr:hover { background: rgba(255,255,255,0.02); }
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+.text-sm { font-size: 12px; }
+.text-xs { font-size: 11px; }
+.status-badge { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #374151; border-radius: 999px; padding: 2px 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; }
+.status-badge.paid { background: rgba(34, 197, 94, 0.1); color: #22c55e; border-color: rgba(34, 197, 94, 0.3); }
+.status-badge.confirmed { background: rgba(59, 130, 246, 0.1); color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
+.status-badge.pending_review { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border-color: rgba(245, 158, 11, 0.3); }
+.status-badge.matched { background: rgba(34, 197, 94, 0.1); color: #22c55e; border-color: rgba(34, 197, 94, 0.3); }
+.status-badge.unmatched { background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+.inv-type { font-size: 12px; padding: 4px 8px; border-radius: 4px; background: #1f2937; color: #94a3b8; }
+.inv-type.sales { color: #22c55e; }
+.inv-type.purchase { color: #60a5fa; }
+.match-cards { display: flex; flex-direction: column; gap: 12px; }
+.match-card { border: 1px solid #1f2937; background: #0a0f1a; border-radius: 1rem; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+.match-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.match-id { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; color: #f8fafc; }
+.match-status { font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 4px; }
+.match-status.matched { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.match-status.unmatched { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.match-row { display: flex; align-items: center; gap: 12px; }
+.match-side { flex: 1; }
+.side-label { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+.side-amount { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; color: #f8fafc; margin-bottom: 4px; }
+.side-date { font-size: 11px; color: #64748b; }
+.match-arrow { font-size: 20px; color: #1d4ed8; font-weight: bold; }
+.settings-form { max-width: 600px; }
+.form-group { margin-bottom: 20px; }
+.input { width: 100%; padding: 10px 12px; border: 1px solid #374151; border-radius: 0.5rem; background: #0b1120; color: #f8fafc; font-size: 14px; }
+.input.select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 16px; padding-right: 36px; }
+.chat-area { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.chat-msg { display: flex; gap: 10px; }
+.chat-msg.bot { flex-direction: row; }
+.chat-msg.user { flex-direction: row-reverse; }
+.chat-avatar { width: 36px; height: 36px; border-radius: 8px; background: #1f2937; color: #2563eb; display: grid; place-items: center; font-size: 14px; font-weight: 600; flex: none; }
+.chat-bubble { max-width: 60%; padding: 12px 16px; border-radius: 1rem; font-size: 14px; line-height: 1.5; }
+.chat-bubble.bot { background: #111827; border: 1px solid #1f2937; color: #cbd5e1; border-bottom-left-radius: 4px; }
+.chat-bubble.user { background: #2563eb; color: #fff; border-bottom-right-radius: 4px; }
+.chat-time { font-size: 11px; color: #64748b; margin-top: 6px; }
+.chat-input-area { display: flex; gap: 8px; padding: 16px 20px; border-top: 1px solid #1f2937; background: #0a0f1a; }
+.chat-input { flex: 1; }
+.send-btn { height: 40px; }
+.replay-btn { position: absolute; inset: 0; z-index: 70; display: none; place-content: center; justify-items: center; gap: 14px; background: rgba(10, 15, 26, 0.86); backdrop-filter: blur(3px); }
+.replay-btn.on { display: grid; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="viewport">
+    <!-- Scene 0: Title Card -->
+    <section class="scene card-scene" data-scene="0">
+      <div class="brandmark">
+        <svg viewBox="0 0 32 32" fill="none" aria-label="DIGITAX logo"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h1>Your books, finally in<span class="text-primary"> sync.</span></h1>
+      <p class="subtitle">DIGITAX brings bookkeeping, GST compliance, banking, and reporting into one calm workspace for modern Indian businesses.</p>
+      <div class="eyebrow">FINANCE, WITHOUT THE FRICTION</div>
+      <div class="actions">
+        <button class="btn primary">Start Free Trial</button>
+        <button class="btn outline">Book a Demo</button>
+      </div>
+    </section>
+
+    <!-- Scene 1: Login -->
+    <section class="scene login" data-scene="1">
+      <div class="glass">
+        <div class="brand-box">
+          <div class="brandmark">
+            <svg viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span class="brand-name">DIGITAX</span>
+        </div>
+        <div class="login-form">
+          <h2 class="auth-title">Sign in to DIGITAX</h2>
+          <p class="auth-subtitle">Use your work email to access your workspace.</p>
+          <div class="input-group">
+            <label class="field-label">Work email</label>
+            <input type="email" placeholder="you@company.com" id="email-field"/>
+          </div>
+          <div class="input-group">
+            <label class="field-label">Password</label>
+            <div class="input-with-icon">
+              <input type="password" placeholder="••••••••" id="password-field"/>
+              <svg class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8-4 8-11 8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="remember-me"><input type="checkbox" checked="true"/><span>Remember me</span></label>
+            <a href="#" class="forgot-link">Forgot password?</a>
+          </div>
+          <button class="btn-primary" id="signin-btn">Sign in</button>
+          <div class="or-divider"><span>Or</span></div>
+          <button class="btn outline">Continue with Google</button>
+          <p class="signup-text">New to DIGITAX? <a href="/register">Create an account</a></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 2: Dashboard -->
+    <section class="scene dashboard" data-scene="2">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">Export</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Navigation</div>
+              <div class="sb-items">
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M3 12v5l2 2m0 0l7 7 7-7M3 12V7l2-2"/></svg><span>Dashboard</span><span class="count">1</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-3v4c0 6-4 10-10 10H2c-6 0-10-4-10-10V2c0-6 4-10 10-10h3v4c0 6 4 10 10 10s10-4 10-10V3c0-6-4-10-10-10"/></svg><span>Transactions</span><span class="count">3</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>GST</span><span class="count">2</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="9"/><line x1="12" y1="20" x2="12" y2="13"/><line x1="6" y1="20" x2="6" y2="2z"/></svg><span>Reconciliation</span><span class="count">23</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>Dashboard</h1>
+                  <p class="desc">Your business snapshot for October 2026</p>
+                </div>
+                <div class="actions">
+                  <button class="btn">Upload Document</button>
+                </div>
+              </div>
+              <div class="kpi-grid">
+                <div class="kpi-card revenue-card">
+                  <div class="kpi-header">
+                    <span class="kpi-label">Total Revenue</span>
+                    <span class="trend-up">+12.8%</span>
+                  </div>
+                  <div class="kpi-value">₹18,42,600</div>
+                  <div class="kpi-subtitle">Outward supplies · Sales invoices</div>
+                </div>
+                <div class="kpi-card expense-card">
+                  <div class="kpi-header">
+                    <span class="kpi-label">Total Expenses</span>
+                    <span class="trend-down">−4.2%</span>
+                  </div>
+                  <div class="kpi-value">₹11,26,340</div>
+                  <div class="kpi-subtitle">Inward supplies · Purchase invoices</div>
+                </div>
+                <div class="kpi-card gst-card">
+                  <div class="kpi-header">
+                    <span class="kpi-label">GST Liability</span>
+                    <span class="trend-up">Due in 6 days</span>
+                  </div>
+                  <div class="kpi-value">₹2,84,760</div>
+                  <div class="kpi-subtitle">Input Tax Credit · Net Liability</div>
+                </div>
+                <div class="kpi-card balance-card">
+                  <div class="kpi-header">
+                    <span class="kpi-label">Cash Balance</span>
+                    <span class="trend-neutral">Updated 10 min ago</span>
+                  </div>
+                  <div class="kpi-value">₹9,68,410</div>
+                  <div class="kpi-subtitle">ICICI Current Account</div>
+                </div>
+              </div>
+              <div class="chart-section">
+                <div class="chart-card">
+                  <div class="chart-header">
+                    <h3 class="chart-title">Revenue vs Expenses</h3>
+                    <div class="chart-period">
+                      <span class="period-label">6 months</span>
+                      <span class="chart-legend">
+                        <span class="legend-dot revenue"></span>Revenue
+                        <span class="legend-dot expense"></span>Expenses
+                      </span>
+                    </div>
+                  </div>
+                  <div class="chart-container">
+                    <div class="chart-placeholder">
+                      <svg viewBox="0 0 600 260">
+                        <polyline points="50,180 120,120 190,200 260,100 330,160 400,80 470,120 540,150 600,100" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M50,240 L50,180 L120,120 L190,200 L260,100 L330,160 L400,80 L470,120 L540,150 L600,100 L600,240 Z" fill="url(#revenue-gradient)"/>
+                        <linearGradient id="revenue-gradient" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#2563eb" stop-opacity="0.2"/><stop offset="100%" stop-color="#2563eb" stop-opacity="0"/></linearGradient>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- Scene 3: GST Workspace -->
+    <section class="scene gst" data-scene="3">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">Export</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Navigation</div>
+              <div class="sb-items">
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M3 12v5l2 2m0 0l7 7 7-7M3 12V7l2-2"/></svg><span>Dashboard</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-3v4c0 6-4 10-10 10H2c-6 0-10-4-10-10V2c0-6 4-10 10-10h3v4c0 6 4 10 10 10s10-4 10-10V3c0-6-4-10-10-10"/></svg><span>Transactions</span></a></div>
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>GST</span><span class="count">2</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="9"/><line x1="12" y1="20" x2="12" y2="13"/><line x1="6" y1="20" x2="6" y2="2z"/></svg><span>Reconciliation</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>GST Workspace</h1>
+                  <p class="desc">File GSTR-1 and GSTR-3B with confidence</p>
+                </div>
+                <div class="actions">
+                  <button class="btn">Generate Summary</button>
+                </div>
+              </div>
+              <div class="segmented">
+                <button class="seg-btn on">GSTR-3B</button>
+                <button class="seg-btn">GSTR-1</button>
+              </div>
+              <div class="metric-grid">
+                <div class="metric-card">
+                  <div class="metric-label">Net Tax Payable</div>
+                  <div class="metric-value">₹2,84,760</div>
+                  <div class="metric-desc">CGST + SGST + IGST</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Outward Supplies</div>
+                  <div class="metric-value">₹18,42,600</div>
+                  <div class="metric-desc">GSTR-1 reported</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Input Tax Credit</div>
+                  <div class="metric-value">₹1,45,300</div>
+                  <div class="metric-desc">Available ITC</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Due Date</div>
+                  <div class="metric-value">20 Nov 2026</div>
+                  <div class="metric-desc">GSTR-3B filing</div>
+                </div>
+              </div>
+              <div class="gst-table">
+                <table class="financial-table">
+                  <thead>
+                    <tr><th>Party</th><th>GSTIN</th><th>Type</th><th>Taxable</th><th>CGST</th><th>SGST</th><th>Status</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Shree Krishna Traders</td><td class="font-mono text-sm">27AABCS1429B1ZB</td><td>Sales</td><td>₹24,366</td><td>₹2,193</td><td>₹2,193</td><td><span class="status-badge confirmed">Confirmed</span></td></tr>
+                    <tr><td>AWS India</td><td class="font-mono text-sm">27AAICA1234A1Z5</td><td>Purchase</td><td>₹42,180</td><td>₹3,796</td><td>₹3,796</td><td><span class="status-badge pending_review">Pending Review</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 4: Transactions -->
+    <section class="scene transactions" data-scene="4">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">Import Statement</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Navigation</div>
+              <div class="sb-items">
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M3 12v5l2 2m0 0l7 7 7-7M3 12V7l2-2"/></svg><span>Dashboard</span></a></div>
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-3v4c0 6-4 10-10 10H2c-6 0-10-4-10-10V2c0-6 4-10 10-10h3v4c0 6 4 10 10 10s10-4 10-10V3c0-6-4-10-10-10"/></svg><span>Transactions</span><span class="count">3</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>GST</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="9"/><line x1="12" y1="20" x2="12" y2="13"/><line x1="6" y1="20" x2="6" y2="2z"/></svg><span>Reconciliation</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>Banking Transactions</h1>
+                  <p class="desc">Reconcile bank transactions with invoices</p>
+                </div>
+                <div class="actions">
+                  <button class="btn">Import Statement</button>
+                </div>
+              </div>
+              <div class="balance-strip">
+                <div class="balance-item">
+                  <div class="balance-label">Total Balance</div>
+                  <div class="balance-value">₹9,68,410</div>
+                  <div class="balance-sub">ICICI Current Account</div>
+                </div>
+                <div class="balance-item">
+                  <div class="balance-label">Unmatched</div>
+                  <div class="balance-value">23</div>
+                  <div class="balance-sub">Pending reconciliation</div>
+                </div>
+                <div class="balance-item">
+                  <div class="balance-label">Matched Today</div>
+                  <div class="balance-value">12</div>
+                  <div class="balance-sub">Auto-matched</div>
+                </div>
+              </div>
+              <div class="txn-table">
+                <table class="financial-table">
+                  <thead><tr><th>Date</th><th>Description</th><th>Reference</th><th>Debit</th><th>Credit</th><th>Status</th></tr></thead>
+                  <tbody>
+                    <tr><td class="font-mono text-sm">20 Oct 2026</td><td>Shree Krishna Traders</td><td class="font-mono text-sm">UPI/INV-2026-1042</td><td>—</td><td class="text-right">₹24,366</td><td><span class="status-badge matched">Matched</span></td></tr>
+                    <tr><td class="font-mono text-sm">21 Oct 2026</td><td>AWS India</td><td class="font-mono text-sm">NEFT/AWS-001</td><td class="text-right">₹42,180</td><td>—</td><td><span class="status-badge matched">Matched</span></td></tr>
+                    <tr><td class="font-mono text-sm">22 Oct 2026</td><td>Zomato Swiggy</td><td class="font-mono text-sm">UPI/ZOM-442</td><td class="text-right">₹1,850</td><td>—</td><td><span class="status-badge unmatched">Unmatched</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- Scene 5: Reconciliation -->
+    <section class="scene reconciliation" data-scene="5">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">Match All</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Navigation</div>
+              <div class="sb-items">
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M3 12v5l2 2m0 0l7 7 7-7M3 12V7l2-2"/></svg><span>Dashboard</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-3v4c0 6-4 10-10 10H2c-6 0-10-4-10-10V2c0-6 4-10 10-10h3v4c0 6 4 10 10 10s10-4 10-10V3c0-6-4-10-10-10"/></svg><span>Transactions</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>GST</span></a></div>
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="9"/><line x1="12" y1="20" x2="12" y2="13"/><line x1="6" y1="20" x2="6" y2="2z"/></svg><span>Reconciliation</span><span class="count">23</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>Reconciliation</h1>
+                  <p class="desc">Match bank transactions to invoices</p>
+                </div>
+                <div class="actions">
+                  <button class="btn">Auto Match</button>
+                </div>
+              </div>
+              <div class="match-cards">
+                <div class="match-card">
+                  <div class="match-header">
+                    <span class="match-id">ZOM-442</span>
+                    <span class="match-status unmatched">Unmatched</span>
+                  </div>
+                  <div class="match-row">
+                    <div class="match-side bank">
+                      <span class="side-label">Bank Transaction</span>
+                      <span class="side-amount">₹1,850</span>
+                      <span class="side-date">22 Oct 2026</span>
+                    </div>
+                    <div class="match-arrow">→</div>
+                    <div class="match-side invoice">
+                      <span class="side-label">Suggested Invoice</span>
+                      <span class="side-amount">₹1,850</span>
+                      <span class="side-date">Inv #INV-2026-1043</span>
+                    </div>
+                  </div>
+                  <button class="btn sm primary">Confirm Match</button>
+                </div>
+                <div class="match-card">
+                  <div class="match-header">
+                    <span class="match-id">UPI-881</span>
+                    <span class="match-status matched">Matched</span>
+                  </div>
+                  <div class="match-row">
+                    <div class="match-side bank">
+                      <span class="side-label">Bank Transaction</span>
+                      <span class="side-amount">₹24,366</span>
+                      <span class="side-date">20 Oct 2026</span>
+                    </div>
+                    <div class="match-arrow">✓</div>
+                    <div class="match-side invoice">
+                      <span class="side-label">Matched Invoice</span>
+                      <span class="side-amount">₹24,366</span>
+                      <span class="side-date">Inv #INV-2026-1042</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 6: Invoices -->
+    <section class="scene invoices" data-scene="6">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">Upload Document</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Navigation</div>
+              <div class="sb-items">
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M3 12v5l2 2m0 0l7 7 7-7M3 12V7l2-2"/></svg><span>Dashboard</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-3v4c0 6-4 10-10 10H2c-6 0-10-4-10-10V2c0-6 4-10 10-10h3v4c0 6 4 10 10 10s10-4 10-10V3c0-6-4-10-10-10"/></svg><span>Transactions</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>GST</span></a></div>
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="9"/><line x1="12" y1="20" x2="12" y2="13"/><line x1="6" y1="20" x2="6" y2="2z"/></svg><span>Reconciliation</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>Invoice Management</h1>
+                  <p class="desc">Record, track, and manage your invoices</p>
+                </div>
+                <div class="actions">
+                  <button class="btn">Upload Document</button>
+                </div>
+              </div>
+              <div class="invoice-table">
+                <table class="financial-table">
+                  <thead><tr><th>Invoice #</th><th>Party</th><th>Type</th><th>Date</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody>
+                    <tr><td class="font-mono text-sm">INV-2026-1042</td><td>Shree Krishna Traders</td><td>Sales Invoice</td><td class="font-mono text-sm">21 Oct 2026</td><td class="text-right font-mono text-sm">₹24,366</td><td><span class="status-badge paid">Paid</span></td><td><button class="btn-sm ghost">View</button></td></tr>
+                    <tr><td class="font-mono text-sm">INV-2026-1041</td><td>AWS India</td><td>Purchase Invoice</td><td class="font-mono text-sm">20 Oct 2026</td><td class="text-right font-mono text-sm">₹42,180</td><td><span class="status-badge paid">Paid</span></td><td><button class="btn-sm ghost">View</button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 7: Settings -->
+    <section class="scene settings" data-scene="7">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">Save</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Settings</div>
+              <div class="sb-items">
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-5a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1h-5a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v5a1.65 1.65 0 0 0 1.51 1"/></svg><span>Profile</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>Business</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Security</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><line x1="6" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="18" y2="16"/></svg><span>Language</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>Profile Settings</h1>
+                  <p class="desc">Manage your account and preferences</p>
+                </div>
+                <div class="actions">
+                  <button class="btn">Save Changes</button>
+                </div>
+              </div>
+              <div class="settings-form">
+                <div class="form-group">
+                  <label class="field-label">Full Name</label>
+                  <input type="text" placeholder="Ananya Kapoor" class="input" value="Ananya Kapoor"/>
+                </div>
+                <div class="form-group">
+                  <label class="field-label">Email</label>
+                  <input type="email" placeholder="ananya@freshmart.in" class="input" value="ananya@freshmart.in"/>
+                </div>
+                <div class="form-group">
+                  <label class="field-label">Shop GSTIN</label>
+                  <input type="text" placeholder="27AABCS1429B1ZB" class="input" value="27AABCS1429B1ZB"/>
+                </div>
+                <div class="form-group">
+                  <label class="field-label">Language</label>
+                  <select class="input select">
+                    <option>English</option>
+                    <option>Hindi</option>
+                    <option>Bengali</option>
+                    <option>Marathi</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- Scene 8: GNANI Assistant -->
+    <section class="scene assistant" data-scene="8">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">New Chat</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Assistant</div>
+              <div class="sb-items">
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg><span>GNANI EVON</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>GNANI EVON</h1>
+                  <p class="desc">AI-powered bookkeeping assistant</p>
+                </div>
+                <div class="actions">
+                  <button class="btn ghost">Export Chat</button>
+                </div>
+              </div>
+              <div class="chat-area">
+                <div class="chat-msg bot">
+                  <div class="chat-avatar bot">G</div>
+                  <div class="chat-bubble bot">
+                    <div class="chat-text">Hello! I'm GNANI EVON, your AI bookkeeping assistant. How can I help you today?</div>
+                    <div class="chat-time font-mono text-xs">10:32 AM</div>
+                  </div>
+                </div>
+                <div class="chat-msg user">
+                  <div class="chat-bubble user">
+                    <div class="chat-text">What is my current GST liability?</div>
+                    <div class="chat-time font-mono text-xs">10:33 AM</div>
+                  </div>
+                </div>
+                <div class="chat-msg bot">
+                  <div class="chat-avatar bot">G</div>
+                  <div class="chat-bubble bot">
+                    <div class="chat-text">Based on your October 2026 data, your net GST liability is ₹2,84,760. This includes CGST, SGST, and IGST components. Would you like me to generate a GSTR-3B summary?</div>
+                    <div class="chat-time font-mono text-xs">10:33 AM</div>
+                  </div>
+                </div>
+              </div>
+              <div class="chat-input-area">
+                <input type="text" placeholder="Ask about your books…" class="input chat-input"/>
+                <button class="btn sm primary send-btn">Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 9: Outro -->
+    <section class="scene card-scene outro" data-scene="9">
+      <div class="brandmark">
+        <svg viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h1>DIGITAX<span class="text-primary"> — Financial clarity for ambitious teams.</span></h1>
+      <div class="eyebrow">Get Started Today</div>
+      <div class="actions" style="margin-top: 24px;">
+        <button class="btn primary">Start Free Trial</button>
+        <button class="btn outline">Book a Demo</button>
+      </div>
+      <p class="subtitle" style="margin-top: 20px; max-width: 600px;">DIGITAX — Bookkeeping, GST compliance, banking, and reporting for modern Indian businesses.</p>
+    </section>
+
+  </div>
+  <div id="ripple"></div>
+  <svg id="cursor" viewBox="0 0 24 24"><path d="M5 2l7.5 18.5 2.6-7.4 7.4-2.6z" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div id="replay" style="position:absolute;inset:0;z-index:70;display:none;place-content:center;justify-items:center;gap:14px;background:rgba(10,15,26,0.86);backdrop-filter:blur(3px);">
+    <button class="btn">Replay demo</button>
+    <div class="hint" style="color:#94a3b8;font-size:12px;">Or press R</div>
+  </div>
+</div>
+<script>
+const $ = (s, root = document) => root.querySelector(s);
+const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const STAGE = { '16:9': { w: 1920, h: 1080, scale: 1 } }['16:9'];
+const W = STAGE.w, H = STAGE.h;
+const stageEl = document.getElementById('stage');
+stageEl.style.width = W + 'px';
+stageEl.style.height = H + 'px';
+function fit() { const s = Math.min(window.innerWidth / W, window.innerHeight / H); stageEl.style.transform = `scale(${s})`; }
+addEventListener('resize', fit); fit();
+const CAPTIONS = { style: 'pill', steps: 8 };
+const scenes = $$('.scene');
+function scene(n) { scenes.forEach((s) => { s.classList.toggle('on', +s.dataset.scene === n); s.style.transform = ''; }); }
+const cursor = document.getElementById('cursor');
+const ripple = document.getElementById('ripple');
+let cx = W / 2, cy = H - 100;
+function place(x, y, ms = 900) { cx = x; cy = y; cursor.style.transitionDuration = ms + 'ms'; cursor.style.transform = `translate(${x}px, ${y}px)`; }
+async function moveTo(sel, ms = 900) { const el = typeof sel === 'string' ? $(sel) : sel; const vp = document.getElementById('viewport').getBoundingClientRect(); const r = el.getBoundingClientRect(); const scale = vp.width / W; cursor.style.opacity = 1; place((r.left + r.width / 2 - vp.left) / scale - 2, (r.top + r.height / 2 - vp.top) / scale - 2, ms); await wait(ms + 80); }
+async function click(sel) { const el = typeof sel === 'string' ? $(sel) : sel; ripple.style.left = cx + 2 + 'px'; ripple.style.top = cy + 2 + 'px'; ripple.classList.remove('go'); void ripple.offsetWidth; ripple.classList.add('go'); if (el) { el.classList.add('pressed'); await wait(130); el.classList.remove('pressed'); } await wait(220); }
+async function tap(sel, ms = 900) { await moveTo(sel, ms); await click(sel); }
+const CAP = {};
+const capPad = (n) => (n < 10 ? '0' : '') + n;
+let capStep = 0;
+(function initCaptions() { const vp = document.getElementById('viewport'); const mk = (cls, html, parent = vp) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; parent.appendChild(d); return d; }; document.getElementById('stage').dataset.captions = CAPTIONS.style; if (CAPTIONS.style === 'pill' || CAPTIONS.style === 'coach') CAP.pill = mk('cap cap-pill', '<span class="dot"></span><span class="t"></span>'); })();
+function say(text, opts = {}) { capStep = opts.step ?? capStep + 1; document.querySelector('.t', CAP.pill).textContent = text; CAP.pill.classList.add('on'); }
+function hush() { ['pill', 'lt', 'coach', 'ring'].forEach((k) => CAP[k] && CAP[k].classList.remove('on')); }
+async function type(el, text, ms = 45) { el.classList.remove('ph'); el.textContent = ''; for (const ch of text) { el.textContent += ch; await wait(ms); } }
+async function play() {
+  // Scene 0: Title - 8s
+  scene(0);
+  await wait(8000);
+  // Scene 1: Login - 12s
+  scene(1);
+  place(W / 2, H - 80, 0);
+  await wait(600);
+  say('Sign in to your shop.');
+  await wait(1000);
+  await tap('#email-field', 1000);
+  await type(document.querySelector('#email-field'), 'sara@freshmart.in', 120);
+  await wait(300);
+  await tap('#password-field', 1000);
+  await type(document.querySelector('#password-field'), 'D3m0Tax2026!', 100);
+  await wait(300);
+  await tap('#signin-btn', 1000);
+  hush();
+  await wait(2000);
+  // Scene 2: Dashboard - 10s
+  scene(2);
+  await wait(2000);
+  say('Your books, finally in sync.');
+  await wait(8000);
+  // Scene 3: GST - 10s
+  scene(3);
+  await wait(2000);
+  say('File GSTR-3B in one click.');
+  await wait(8000);
+  // Scene 4: Transactions - 10s
+  scene(4);
+  await wait(2000);
+  say('Reconcile bank transactions with invoices.');
+  await wait(8000);
+  // Scene 5: Reconciliation - 10s
+  scene(5);
+  await wait(2000);
+  say('Match transactions to invoices in seconds.');
+  await wait(8000);
+  // Scene 6: Invoices - 10s
+  scene(6);
+  await wait(2000);
+  say('Manage your invoices with ease.');
+  await wait(8000);
+  // Scene 7: Settings - 8s
+  scene(7);
+  await wait(8000);
+  // Scene 8: Assistant - 8s
+  scene(8);
+  await wait(2000);
+  say('GNANI EVON answers your bookkeeping questions.');
+  await wait(6000);
+  // Scene 9: Outro - 6s
+  scene(9);
+  await wait(2000);
+  say('DIGITAX — Financial clarity for ambitious teams.');
+  await wait(4000);
+  window.__demoDone = true;
+  if (!new URLSearchParams(location.search).has('record')) document.getElementById('replay').style.display = 'grid';
+}
+addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'r') location.reload(); });
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => play());
+</script>
+</body>
+</html>
