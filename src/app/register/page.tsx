@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createClient } from '@/lib/supabase/client';
-import { ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { gstinSchema } from '@/lib/validation/schemas';
 import { ShieldCheck, Mail, Lock, User, AlertCircle } from 'lucide-react';
 import { z } from 'zod';
 
@@ -48,9 +48,28 @@ function RegisterForm() {
       }
 
       const supabase = createClient();
+
+      // Validate optional GSTIN against the shared schema before signup so a
+      // malformed GSTIN never reaches the account metadata.
+      const gstinInput = formData.gstin.trim().toUpperCase();
+      if (gstinInput) {
+        const gstinCheck = gstinSchema.safeParse(gstinInput);
+        if (!gstinCheck.success) {
+          setError(gstinCheck.error.issues[0]?.message || 'Invalid GSTIN format');
+          setLoading(false);
+          return;
+        }
+      }
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
+        options: {
+          data: {
+            business_name: formData.businessName.trim(),
+            gstin: gstinInput || null,
+          },
+        },
       });
 
       if (signUpError) {
@@ -59,14 +78,17 @@ function RegisterForm() {
         return;
       }
 
-      if (data?.user && !data.session) {
-        setConfirmationNeeded(true);
-        setLoading(false);
+      if (data?.session) {
+        // Session created immediately (email confirmation disabled) —
+        // continue straight to business onboarding.
+        router.push('/onboarding');
         return;
       }
 
-      router.push('/onboarding');
+      // Email confirmation required: the confirmation link returns the user
+      // here, then they sign in normally.
       setError('Account created. Please check your email to confirm your address.');
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed.');
       setLoading(false);

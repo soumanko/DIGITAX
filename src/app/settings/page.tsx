@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeftRight,
@@ -28,8 +29,49 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { useShopContext, identityInitials } from '@/lib/client/use-shop-context';
+import { StaticBusinessName } from '@/components/layout/static-business-name';
+
+function fyLabel(startYear: number): string {
+  return `FY ${startYear}–${String((startYear + 1) % 100).padStart(2, '0')}`;
+}
 
 export default function Settings() {
+  const router = useRouter();
+  const {
+    shop,
+    loading: ctxLoading,
+    error: ctxError,
+    needsOnboarding,
+    userEmail,
+    refresh,
+  } = useShopContext();
+
+  const [currentFy, setCurrentFy] = useState<number | null>(null);
+  const [fy, setFy] = useState('');
+
+  // Resolved on the client after mount (never during prerender).
+  useEffect(() => {
+    let cancelled = false;
+    async function init() {
+      await Promise.resolve();
+      if (cancelled) return;
+      const t = new Date();
+      setCurrentFy(t.getMonth() + 1 >= 4 ? t.getFullYear() : t.getFullYear() - 1);
+    }
+    init();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const schemeLabel: Record<string, string> = {
+    regular: 'Regular',
+    composition_goods: 'Composition (goods)',
+    composition_services: 'Composition (services)',
+    qrmp: 'QRMP',
+  };
+
   return (
     <div data-appearance="light">
       <div className="bg-background text-foreground w-full h-fit min-h-screen w-screen min-w-screen max-w-screen overflow-visible">
@@ -42,9 +84,7 @@ export default function Settings() {
           <button className="text-left rounded-md bg-card text-foreground text-sm border border-border flex mt-6 px-3 justify-between items-center w-full h-11">
             <span className="flex items-center gap-2 min-w-0">
               <Building2 className="text-muted-foreground shrink-0 size-4" />
-              <span className="text-ellipsis whitespace-nowrap overflow-hidden">
-                Aster Labs Pvt. Ltd.
-              </span>
+              <StaticBusinessName />
             </span>
             <ChevronsUpDown className="text-muted-foreground shrink-0 size-4" />
           </button>
@@ -109,23 +149,23 @@ export default function Settings() {
             </a>
           </nav>
           <div className="border-x border-t border-b flex pt-4 flex-col gap-2">
-            <a
-              href="#"
+            <Link
+              href="/dashboard"
               className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
             >
               <CircleHelp className="size-4" />
               <span>{`Help & support`}</span>
-            </a>
+            </Link>
             <button className="text-left rounded-md flex px-3 py-2 items-center gap-3 hover:bg-accent active:bg-muted hover:active:bg-muted">
               <span className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center shrink-0 size-8">
-                AK
+                {identityInitials(userEmail)}
               </span>
               <span className="min-w-0">
                 <span className="font-medium text-ellipsis whitespace-nowrap text-foreground text-sm block overflow-hidden">
-                  Ananya Kapoor
+                  {userEmail || 'Signed in'}
                 </span>
                 <span className="text-ellipsis whitespace-nowrap text-muted-foreground text-xs block overflow-hidden">
-                  Admin
+                  Account
                 </span>
               </span>
               <MoreHorizontal className="text-muted-foreground ml-auto shrink-0 size-4" />
@@ -159,7 +199,7 @@ export default function Settings() {
                 aria-label="Open profile"
                 className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center size-8"
               >
-                AK
+                {identityInitials(userEmail)}
               </button>
             </div>
           </header>
@@ -173,190 +213,262 @@ export default function Settings() {
                   Control your workspace, team, and financial preferences.
                 </p>
               </div>
-              <div className="grid items-start gap-8 grid-cols-[220px_minmax(0,1fr)]">
-                <Card className="rounded-lg">
-                  <CardContent className="flex p-2 flex-col gap-1">
-                    <a
-                      href="#"
-                      className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center h-10"
-                    >
-                      Workspace
-                    </a>
-                    <a
-                      href="#"
-                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
-                    >{`Team & permissions`}</a>
-                    <a
-                      href="#"
-                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
-                    >
-                      Notifications
-                    </a>
-                    <a
-                      href="#"
-                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
-                    >
-                      Integrations
-                    </a>
-                    <a
-                      href="#"
-                      className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
-                    >
-                      Billing
-                    </a>
+              {ctxError ? (
+                <Card>
+                  <CardContent className="p-10 text-center">
+                    <p className="font-medium">Could not load your business context.</p>
+                    <Button className="mt-4 h-9" onClick={() => refresh()}>
+                      Retry
+                    </Button>
                   </CardContent>
                 </Card>
-                <div className="flex flex-col gap-6">
+              ) : ctxLoading ? (
+                <Card>
+                  <CardContent className="p-10 text-center">
+                    <p className="font-medium text-muted-foreground">Loading your workspace…</p>
+                  </CardContent>
+                </Card>
+              ) : needsOnboarding ? (
+                <Card>
+                  <CardContent className="p-10 text-center">
+                    <Building2 className="text-muted-foreground size-10 mx-auto" />
+                    <p className="font-medium mt-4">No business yet</p>
+                    <p className="text-muted-foreground text-sm mt-1">
+                      Complete onboarding to set up your workspace.
+                    </p>
+                    <Button className="mt-4 h-9" onClick={() => router.push('/onboarding')}>
+                      Set up business
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid items-start gap-8 grid-cols-[220px_minmax(0,1fr)]">
                   <Card className="rounded-lg">
-                    <CardHeader>
-                      <CardTitle>Workspace details</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-6">
-                      <div className="grid gap-6 grid-cols-2">
-                        <div className="flex flex-col gap-2">
-                          <label
-                            htmlFor="business-name"
-                            className="font-medium text-sm"
-                          >
-                            Business name
-                          </label>
-                          <Input
-                            id="business-name"
-                            defaultValue="Aster Labs Pvt. Ltd."
-                            className="focus-visible:ring-2 focus-visible:ring-ring"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label
-                            htmlFor="legal-name"
-                            className="font-medium text-sm"
-                          >
-                            Legal name
-                          </label>
-                          <Input
-                            id="legal-name"
-                            defaultValue="Aster Labs Private Limited"
-                            className="focus-visible:ring-2 focus-visible:ring-ring"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label
-                            htmlFor="gstin"
-                            className="font-medium text-sm"
-                          >
-                            GSTIN
-                          </label>
-                          <Input
-                            id="gstin"
-                            defaultValue="27AABCU9603R1ZV"
-                            className="focus-visible:ring-2 focus-visible:ring-ring"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label htmlFor="pan" className="font-medium text-sm">
-                            PAN
-                          </label>
-                          <Input
-                            id="pan"
-                            defaultValue="AABCU9603R"
-                            className="focus-visible:ring-2 focus-visible:ring-ring"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2 col-span-2">
-                          <label
-                            htmlFor="registered-address"
-                            className="font-medium text-sm"
-                          >
-                            Registered address
-                          </label>
-                          <Input
-                            id="registered-address"
-                            defaultValue="Bandra Kurla Complex, Mumbai, Maharashtra 400051"
-                            className="focus-visible:ring-2 focus-visible:ring-ring"
-                          />
-                        </div>
-                      </div>
-                      <div className="border-x border-t border-b flex pt-6 justify-end items-center gap-3">
-                        <Button variant="secondary">Discard</Button>
-                        <Button>Save changes</Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="rounded-lg">
-                    <CardHeader>
-                      <CardTitle>Financial preferences</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-6">
-                      <div className="grid gap-6 grid-cols-2">
-                        <div className="flex flex-col gap-2">
-                          <label className="font-medium text-sm">
-                            Financial year
-                          </label>
-                          <Select defaultValue="FY 2024–25">
-                            <SelectTrigger className="focus:ring-2 focus:ring-ring">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="FY 2024–25">
-                                FY 2024–25
-                              </SelectItem>
-                              <SelectItem value="FY 2023–24">
-                                FY 2023–24
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-medium text-sm">
-                            Base currency
-                          </label>
-                          <Select defaultValue="INR — Indian Rupee">
-                            <SelectTrigger className="focus:ring-2 focus:ring-ring">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="INR — Indian Rupee">
-                                INR — Indian Rupee
-                              </SelectItem>
-                              <SelectItem value="USD — US Dollar">
-                                USD — US Dollar
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="border-x border-t border-b flex pt-6 justify-between items-center">
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium text-sm">
-                            Lock closed months
-                          </span>
-                          <span className="text-muted-foreground text-sm">
-                            Prevent edits to transactions in closed accounting
-                            months.
-                          </span>
-                        </div>
-                        <Switch defaultChecked={false} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="rounded-lg border-destructive/40">
-                    <CardHeader>
-                      <CardTitle>Danger zone</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex justify-between items-center gap-6">
-                      <p className="text-muted-foreground text-sm">
-                        Disconnecting your workspace removes bank sync access.
-                      </p>
-                      <Button
-                        variant="outline"
-                        className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive"
+                    <CardContent className="flex p-2 flex-col gap-1">
+                      <a
+                        href="#"
+                        className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center h-10"
                       >
-                        Disconnect workspace
-                      </Button>
+                        Workspace
+                      </a>
+                      <a
+                        href="#"
+                        className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                        title="Team membership is managed through shop records — invites surface in Team activity."
+                      >{`Team & permissions`}</a>
+                      <a
+                        href="#"
+                        className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                        title="Notification rules are not configurable in this release."
+                      >
+                        Notifications
+                      </a>
+                      <a
+                        href="#"
+                        className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                        title="No third-party bank/feed integrations are connected for this workspace."
+                      >
+                        Integrations
+                      </a>
+                      <a
+                        href="#"
+                        className="rounded-md text-muted-foreground text-sm flex px-3 items-center h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
+                        title="DIGITAX billing is not configured in this release."
+                      >
+                        Billing
+                      </a>
                     </CardContent>
                   </Card>
+                  <div className="flex flex-col gap-6">
+                    <Card className="rounded-lg">
+                      <CardHeader>
+                        <CardTitle>Workspace details</CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex flex-col gap-6">
+                        <div className="grid gap-6 grid-cols-2">
+                          <div className="flex flex-col gap-2">
+                            <label
+                              htmlFor="business-name"
+                              className="font-medium text-sm"
+                            >
+                              Business name
+                            </label>
+                            <Input
+                              id="business-name"
+                              value={shop?.name || ''}
+                              readOnly
+                              title="Sourced from your authorised business record — profile updates need a workspace update API."
+                              className="focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <label
+                              htmlFor="legal-name"
+                              className="font-medium text-sm"
+                            >
+                              Legal name
+                            </label>
+                            <Input
+                              id="legal-name"
+                              value={shop?.business_type || ''}
+                              readOnly
+                              placeholder="Not recorded"
+                              title="Business type from your onboarding record."
+                              className="focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <label
+                              htmlFor="gstin"
+                              className="font-medium text-sm"
+                            >
+                              GSTIN
+                            </label>
+                            <Input
+                              id="gstin"
+                              value={shop?.gstin || ''}
+                              readOnly
+                              placeholder="Not recorded"
+                              title="GSTIN registered for this business."
+                              className="focus-visible:ring-2 focus-visible:ring-ring font-mono"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <label htmlFor="pan" className="font-medium text-sm">
+                              Tax scheme
+                            </label>
+                            <Input
+                              id="pan"
+                              value={schemeLabel[shop?.taxpayer_scheme || 'regular'] || 'Regular'}
+                              readOnly
+                              title="Taxpayer scheme chosen during onboarding."
+                              className="focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2 col-span-2">
+                            <label
+                              htmlFor="registered-address"
+                              className="font-medium text-sm"
+                            >
+                              State · Language
+                            </label>
+                            <Input
+                              id="registered-address"
+                              value={[
+                                shop?.state || shop?.state_code || 'State not recorded',
+                                shop?.preferred_language
+                                  ? (shop.preferred_language === 'en'
+                                      ? 'English'
+                                      : shop.preferred_language === 'hi'
+                                        ? 'Hindi'
+                                        : shop.preferred_language === 'bn'
+                                          ? 'Bengali'
+                                          : 'Marathi')
+                                  : 'Language not set',
+                              ].join(' · ')}
+                              readOnly
+                              title="Place of supply preferences from your business record."
+                              className="focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                          </div>
+                        </div>
+                        <div className="border-x border-t border-b flex pt-6 justify-end items-center gap-3">
+                          <Button
+                            variant="secondary"
+                            title="Nothing has been changed — values are live from the business record."
+                          >
+                            Discard
+                          </Button>
+                          <Button
+                            title="Workspace edits need a profile-update API (proposed migration) — this release shows the live record read-only."
+                          >
+                            Save changes
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="rounded-lg">
+                      <CardHeader>
+                        <CardTitle>Financial preferences</CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex flex-col gap-6">
+                        <div className="grid gap-6 grid-cols-2">
+                          <div className="flex flex-col gap-2">
+                            <label className="font-medium text-sm">
+                              Financial year
+                            </label>
+                            <Select value={fy || (currentFy ? `fy-${currentFy}` : '')} onValueChange={(v) => setFy(v)}>
+                              <SelectTrigger className="focus:ring-2 focus:ring-ring">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(currentFy !== null ? [currentFy, currentFy - 1] : []).map((y) => (
+                                  <SelectItem key={y} value={`fy-${y}`}>
+                                    {fyLabel(y)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <label
+                              className="font-medium text-sm"
+                              title="DIGITAX records are computed in INR only — statutory GST filing is rupee-denominated."
+                            >
+                              Base currency
+                            </label>
+                            <Select
+                              value="INR — Indian Rupee"
+                              disabled
+                            >
+                              <SelectTrigger className="focus:ring-2 focus:ring-ring">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="INR — Indian Rupee">
+                                  INR — Indian Rupee
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="border-x border-t border-b flex pt-6 justify-between items-center">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium text-sm">
+                              Lock closed months
+                            </span>
+                            <span className="text-muted-foreground text-sm">
+                              Prevent edits to transactions in closed accounting
+                              months.
+                            </span>
+                          </div>
+                          <label title="Month locking requires a filing-period lock API (proposed migration) — not active in this release.">
+                            <Switch defaultChecked={false} disabled />
+                          </label>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="rounded-lg border-destructive/40">
+                      <CardHeader>
+                        <CardTitle>Danger zone</CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex justify-between items-center gap-6">
+                        <p className="text-muted-foreground text-sm">
+                          No bank feeds are connected to this workspace — nothing to disconnect. Account delete lives under Account actions on the Overview page.
+                        </p>
+                        <Button
+                          variant="outline"
+                          className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => router.push('/dashboard')}
+                          title="Go to Overview → Account actions"
+                        >
+                          Disconnect workspace
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </main>
         </div>
@@ -364,4 +476,3 @@ export default function Settings() {
     </div>
   );
 }
-

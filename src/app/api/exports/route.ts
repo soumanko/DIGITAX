@@ -4,7 +4,6 @@ import type { DbShop } from '@/types/database';
 import type { Invoice } from '@/types';
 import { generateGSTPeriodSummary } from '@/lib/gst/calculator';
 import { money, roundMoney } from '@/lib/decimal';
-import { DEMO_SHOP, DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
 
 function sanitizeCSVField(val: unknown): string {
   if (val === null || val === undefined) return '""';
@@ -24,22 +23,14 @@ export async function GET(request: NextRequest) {
     const year = parseInt(searchParams.get('year') || '2026', 10);
     const month = parseInt(searchParams.get('month') || '10', 10);
 
-    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
-    const isDev = process.env.NODE_ENV !== 'production';
-
     const ctx = await getAuthenticatedContext();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let invoices: any[];
-    let shop: DbShop | typeof DEMO_SHOP | null;
+    let shop: DbShop | null;
 
     if (!ctx.userId) {
-      if (isDemoCookie && isDev) {
-        invoices = DEMO_INVOICES;
-        shop = DEMO_SHOP;
-      } else {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     } else {
       if (!ctx.shop) {
         return NextResponse.json({ error: 'No active shop found' }, { status: 404 });
@@ -120,6 +111,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     console.error('Error generating report export:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Export failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Export failed' }, { status: 500 });
   }
 }

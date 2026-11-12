@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
+  AlertTriangle,
   ArrowLeftRight,
   BarChart3,
   Bell,
@@ -13,10 +13,12 @@ import {
   CircleHelp,
   Landmark,
   LayoutDashboard,
+  LogOut,
   MoreHorizontal,
   ReceiptText,
   Search,
   Settings,
+  Trash2,
   TrendingUp,
   Users,
 } from 'lucide-react';
@@ -38,9 +40,267 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { money, formatINR, Decimal } from '@/lib/decimal';
+import { createClient } from '@/lib/supabase/client';
+import Link from 'next/link';
+
+interface DashboardShop {
+  id: string;
+  name: string;
+  owner_name?: string;
+  gstin?: string | null;
+}
+
+interface DashboardInvoice {
+  id: string;
+  invoice_number: string;
+  direction: string;
+  invoice_date: string;
+  total_amount: string;
+  cgst_amount?: string;
+  cgst_total?: string;
+  sgst_amount?: string;
+  sgst_total?: string;
+  igst_amount?: string;
+  igst_total?: string;
+  review_state: string;
+}
+
+interface DashboardTransaction {
+  id: string;
+  description?: string;
+  source?: string;
+  transaction_date?: string;
+  amount: string;
+  direction: string;
+  reconciliation_status: string;
+}
 
 export default function ExecutiveOverview() {
   const router = useRouter();
+  const [shop, setShop] = useState<DashboardShop | null>(null);
+  const [invoices, setInvoices] = useState<DashboardInvoice[]>([]);
+  const [transactions, setTransactions] = useState<DashboardTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [today, setToday] = useState<Date | null>(null);
+  const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
+  const [accountPanel, setAccountPanel] = useState<'sidebar' | 'header' | null>(null);
+  const [deleteStage, setDeleteStage] = useState<'idle' | 'confirm'>('idle');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadDashboardData() {
+      try {
+        setLoading(true);
+        setToday(new Date());
+        const [shopRes, invRes, txnRes] = await Promise.all([
+          fetch('/api/shops'),
+          fetch('/api/invoices?limit=100'),
+          fetch('/api/transactions?limit=100'),
+        ]);
+
+        if (shopRes.ok) {
+          const shopData = await shopRes.json();
+          setShop(shopData.shop || null);
+        }
+
+        if (invRes.ok) {
+          const invData = await invRes.json();
+          setInvoices(Array.isArray(invData.invoices) ? invData.invoices : []);
+        }
+
+        if (txnRes.ok) {
+          const txnData = await txnRes.json();
+          setTransactions(Array.isArray(txnData.transactions) ? txnData.transactions : []);
+        }
+
+        // Real signed-in user identity for the account options menu
+        try {
+          const supabase = createClient();
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData?.user?.email) setOwnerEmail(userData.user.email);
+        } catch {
+          // Account panel falls back to generic identity text
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadDashboardData();
+  }, []);
+
+  async function handleLogout() {
+    setAccountPanel(null);
+    try {
+      await fetch('/api/auth/signout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+    } catch {
+      // Fall through — the refresh below still ends the client session, and
+      // middleware fail-closes on any stale cookie.
+    }
+    router.push('/login');
+    router.refresh();
+  }
+
+  async function handleDeleteAccount() {
+    if (deletingAccount || deleteConfirmText !== 'DELETE') return;
+    setDeletingAccount(true);
+    setAccountError(null);
+    try {
+      const res = await fetch('/api/auth/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: deleteConfirmText }),
+      });
+      if (res.ok) {
+        // Account and business data were deleted server-side. Leave this
+        // browser with no residual session state.
+        router.push('/register');
+        router.refresh();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      setAccountError(
+        data.error || `The server could not delete the account (HTTP ${res.status}). Nothing was removed.`
+      );
+    } catch {
+      setAccountError('Network error during account deletion. Nothing was removed — please try again.');
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
+
+  function openDeleteConfirmation() {
+    setDeleteStage('confirm');
+    setDeleteConfirmText('');
+    setAccountError(null);
+  }
+
+  function closeAccountPanel() {
+    setAccountPanel(null);
+    setDeleteStage('idle');
+    setDeleteConfirmText('');
+    setAccountError(null);
+  }
+
+  if (loading || !today) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-secondary">
+        <div className="text-center">
+          <div className="inline-flex h-12 w-12 rounded-xl bg-primary-600 items-center justify-center text-white font-bold text-xl mb-3 shadow-md">
+            D
+          </div>
+          <p className="text-sm text-text-secondary">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-secondary">
+        <div className="text-center">
+          <div className="inline-flex h-12 w-12 rounded-xl bg-error-600 items-center justify-center text-white font-bold text-xl mb-3 shadow-md">
+            !
+          </div>
+          <p className="text-sm text-text-secondary">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Compute KPIs from real data
+  const salesInvoices = invoices.filter((i: DashboardInvoice) => i.direction === 'sales');
+  const purchaseInvoices = invoices.filter((i: DashboardInvoice) => i.direction === 'purchase');
+
+  const totalRevenue = salesInvoices.reduce((acc, inv) => acc.plus(money(inv.total_amount || '0')), money(0));
+  const totalExpenses = purchaseInvoices.reduce((acc, inv) => acc.plus(money(inv.total_amount || '0')), money(0));
+
+  // GST liability from sales invoices (CGST + SGST + IGST)
+  const gstLiability = salesInvoices.reduce((acc, inv) => {
+    const cgst = money(inv.cgst_amount || inv.cgst_total || '0');
+    const sgst = money(inv.sgst_amount || inv.sgst_total || '0');
+    const igst = money(inv.igst_amount || inv.igst_total || '0');
+    return acc.plus(cgst).plus(sgst).plus(igst);
+  }, money(0));
+
+  // Cash balance from credit transactions minus debits
+  const creditTxs = transactions.filter((t: DashboardTransaction) => t.direction === 'credit');
+  const debitTxs = transactions.filter((t: DashboardTransaction) => t.direction === 'debit');
+  const totalCredits = creditTxs.reduce((acc, t) => acc.plus(money(t.amount || '0')), money(0));
+  const totalDebits = debitTxs.reduce((acc, t) => acc.plus(money(t.amount || '0')), money(0));
+  const cashBalance = totalCredits.minus(totalDebits);
+
+  const shopName = shop?.name || 'My Business';
+  const ownerName = shop?.owner_name || 'Business Owner';
+  const ownerInitials = ownerName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
+  const unmatchedCount = transactions.filter((t: DashboardTransaction) => t.reconciliation_status === 'unmatched').length;
+  const pendingReviewCount = invoices.filter((i: DashboardInvoice) => i.review_state === 'pending_review').length;
+
+  // Real month-over-month deltas derived from invoice dates — no fabricated
+  // percentages. When there is no prior-month baseline the UI shows "—".
+  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const thisMonthKey = monthKey(today);
+  const lastMonthKey = monthKey(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+
+  const salesThisMonth = salesInvoices.filter((i) => i.invoice_date?.startsWith(thisMonthKey));
+  const salesLastMonth = salesInvoices.filter((i) => i.invoice_date?.startsWith(lastMonthKey));
+  const purchasesThisMonth = purchaseInvoices.filter((i) => i.invoice_date?.startsWith(thisMonthKey));
+  const purchasesLastMonth = purchaseInvoices.filter((i) => i.invoice_date?.startsWith(lastMonthKey));
+
+  const revenueThisMonth = salesThisMonth.reduce((acc, inv) => acc.plus(money(inv.total_amount || '0')), money(0));
+  const revenueLastMonth = salesLastMonth.reduce((acc, inv) => acc.plus(money(inv.total_amount || '0')), money(0));
+  const expensesThisMonth = purchasesThisMonth.reduce((acc, inv) => acc.plus(money(inv.total_amount || '0')), money(0));
+  const expensesLastMonth = purchasesLastMonth.reduce((acc, inv) => acc.plus(money(inv.total_amount || '0')), money(0));
+
+  function percentDelta(current: Decimal, previous: Decimal): string | null {
+    if (previous.lte(0)) return null;
+    const diff = current.minus(previous).div(previous).mul(100);
+    const sign = diff.gt(0) ? '+' : diff.lt(0) ? '-' : '';
+    return `${sign}${Math.abs(diff.toDecimalPlaces(1).toNumber())}%`;
+  }
+  const revenueDelta = percentDelta(revenueThisMonth, revenueLastMonth);
+  const expensesDelta = percentDelta(expensesThisMonth, expensesLastMonth);
+
+  // GSTR-3B statutory due date: 20th of the month following the tax period.
+  const gstDueDate = new Date(today.getFullYear(), today.getMonth() + 1, 20);
+  const daysToDue = Math.ceil((gstDueDate.getTime() - today.getTime()) / 86400000);
+  const gstDueText = `Due ${gstDueDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}${daysToDue >= 0 ? ` · in ${daysToDue} days` : ''}`;
+
+  // Real cash-flow series: last 6 months derived from invoice dates
+  const cashFlowSeries = Array.from({ length: 6 }, (_, idx) => {
+    const d = new Date(today.getFullYear(), today.getMonth() - (5 - idx), 1);
+    const key = monthKey(d);
+    const label = d.toLocaleString('en-IN', { month: 'short' });
+    const rev = salesInvoices
+      .filter((i) => i.invoice_date?.startsWith(key))
+      .reduce((a, i) => a.plus(money(i.total_amount || '0')), money(0));
+    const exp = purchaseInvoices
+      .filter((i) => i.invoice_date?.startsWith(key))
+      .reduce((a, i) => a.plus(money(i.total_amount || '0')), money(0));
+    return { month: label, revenue: rev.toNumber(), expenses: exp.toNumber() };
+  });
+
+  // GSTR-3B readiness: share of this period's sales invoices confirmed by
+  // review (0% when the period has no recorded sales).
+  const confirmedSalesThisMonth = salesThisMonth.filter((i) => i.review_state === 'confirmed').length;
+  const filingCompletion = salesThisMonth.length === 0 ? 0 : Math.floor((confirmedSalesThisMonth / salesThisMonth.length) * 100);
+  const filingReady = salesThisMonth.length > 0 && filingCompletion >= 100;
+
   return (
     <div data-appearance="light">
       <div className="bg-background text-foreground w-full h-fit min-h-screen w-screen min-w-screen max-w-screen overflow-visible">
@@ -54,90 +314,110 @@ export default function ExecutiveOverview() {
             <span className="flex items-center gap-2 min-w-0">
               <Building2 className="text-muted-foreground shrink-0 size-4" />
               <span className="text-ellipsis whitespace-nowrap overflow-hidden">
-                Aster Labs Pvt. Ltd.
+                {shopName}
               </span>
             </span>
             <ChevronsUpDown className="text-muted-foreground shrink-0 size-4" />
           </button>
           <nav className="flex mt-7 flex-col flex-1 gap-1">
             <a
-              href="#"
+              href="/dashboard"
               className="font-medium rounded-md bg-primary text-primary-foreground text-sm flex px-3 items-center gap-3 h-10"
             >
               <LayoutDashboard className="size-4" />
               <span>Overview</span>
             </a>
             <a
-              href="#"
               className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
               onClick={() => router.push('/transactions')}
+              href="/transactions"
             >
               <ArrowLeftRight className="size-4" />
               <span>Transactions</span>
             </a>
             <a
-              href="#"
               className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
               onClick={() => router.push('/gst')}
+              href="/gst"
             >
               <ReceiptText className="size-4" />
               <span>{`GST & Tax`}</span>
             </a>
             <a
-              href="#"
               className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
               onClick={() => router.push('/banking')}
+              href="/banking"
             >
               <Landmark className="size-4" />
               <span>Banking</span>
             </a>
             <a
-              href="#"
               className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
               onClick={() => router.push('/reports')}
+              href="/reports"
             >
               <BarChart3 className="size-4" />
               <span>Reports</span>
             </a>
             <a
-              href="#"
               className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
               onClick={() => router.push('/contacts')}
+              href="/contacts"
             >
               <Users className="size-4" />
               <span>Contacts</span>
             </a>
             <a
-              href="#"
               className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
               onClick={() => router.push('/settings')}
+              href="/settings"
             >
               <Settings className="size-4" />
               <span>Settings</span>
             </a>
           </nav>
-          <div className="border-x border-t border-b flex pt-4 flex-col gap-2">
+          <div className="border-x border-t border-b flex pt-4 flex-col gap-2 relative">
             <a
-              href="#"
+              href="/faq"
               className="rounded-md text-muted-foreground text-sm flex px-3 items-center gap-3 h-10 hover:bg-accent hover:text-foreground active:bg-muted hover:active:bg-muted"
             >
               <CircleHelp className="size-4" />
               <span>{`Help & support`}</span>
             </a>
-            <button className="text-left rounded-md flex px-3 py-2 items-center gap-3 hover:bg-accent active:bg-muted hover:active:bg-muted">
+            <button
+              className="text-left rounded-md flex px-3 py-2 items-center gap-3 hover:bg-accent active:bg-muted hover:active:bg-muted"
+              onClick={() => setAccountPanel(accountPanel === 'sidebar' ? null : 'sidebar')}
+              aria-haspopup="menu"
+              aria-expanded={accountPanel === 'sidebar'}
+            >
               <span className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center shrink-0 size-8">
-                AK
+                {ownerInitials}
               </span>
               <span className="min-w-0">
                 <span className="font-medium text-ellipsis whitespace-nowrap text-foreground text-sm block overflow-hidden">
-                  Ananya Kapoor
+                  {ownerName}
                 </span>
                 <span className="text-ellipsis whitespace-nowrap text-muted-foreground text-xs block overflow-hidden">
-                  Admin
+                  {ownerEmail || 'Admin'}
                 </span>
               </span>
               <MoreHorizontal className="text-muted-foreground ml-auto shrink-0 size-4" />
             </button>
+            {accountPanel === 'sidebar' && (
+              <AccountMenuPanel
+                variant="sidebar"
+                ownerEmail={ownerEmail}
+                deleteStage={deleteStage}
+                deleteConfirmText={deleteConfirmText}
+                deletingAccount={deletingAccount}
+                accountError={accountError}
+                onClose={closeAccountPanel}
+                onStartDelete={openDeleteConfirmation}
+                onDelete={handleDeleteAccount}
+                onLogout={handleLogout}
+                onConfirmTextChange={setDeleteConfirmText}
+              />
+            )}
           </div>
         </aside>
         <div className="ml-64 min-h-screen">
@@ -163,12 +443,32 @@ export default function ExecutiveOverview() {
               >
                 <Bell className="size-4" />
               </button>
-              <button
-                aria-label="Open profile"
-                className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center size-8"
-              >
-                AK
-              </button>
+              <div className="relative">
+                <button
+                  aria-label="Open profile"
+                  aria-haspopup="menu"
+                  aria-expanded={accountPanel === 'header'}
+                  className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center size-8"
+                  onClick={() => setAccountPanel(accountPanel === 'header' ? null : 'header')}
+                >
+                  {ownerInitials}
+                </button>
+                {accountPanel === 'header' && (
+                  <AccountMenuPanel
+                    variant="header"
+                    ownerEmail={ownerEmail}
+                    deleteStage={deleteStage}
+                    deleteConfirmText={deleteConfirmText}
+                    deletingAccount={deletingAccount}
+                    accountError={accountError}
+                    onClose={closeAccountPanel}
+                    onStartDelete={openDeleteConfirmation}
+                    onDelete={handleDeleteAccount}
+                    onLogout={handleLogout}
+                    onConfirmTextChange={setDeleteConfirmText}
+                  />
+                )}
+              </div>
             </div>
           </header>
           <main className="px-8 pt-24 pb-8">
@@ -176,10 +476,10 @@ export default function ExecutiveOverview() {
               <div className="flex justify-between items-start">
                 <div>
                   <h1 className="font-semibold text-foreground text-2xl tracking-tight">
-                    Good morning, Ananya
+                    Good morning, {ownerName.split(' ')[0]}
                   </h1>
                   <p className="text-muted-foreground text-sm mt-2">
-                    Here&rsquo;s your business snapshot for 24 Jun 2024.
+                    Here&rsquo;s your business snapshot.
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -207,10 +507,10 @@ export default function ExecutiveOverview() {
                     <TrendingUp className="text-primary size-4" />
                   </div>
                   <div className="font-semibold text-2xl tracking-tight mt-4">
-                    ₹18,42,600
+                    {formatINR(totalRevenue.toString())}
                   </div>
-                  <div className="text-primary text-xs mt-2">
-                    +12.8%
+                  <div className={`text-xs mt-2 ${revenueDelta?.startsWith('-') ? 'text-error-600' : 'text-primary'}`}>
+                    {revenueDelta ?? '—'}
                     <span className="text-muted-foreground">vs last month</span>
                   </div>
                 </Card>
@@ -221,10 +521,10 @@ export default function ExecutiveOverview() {
                     </span>
                   </div>
                   <div className="font-semibold text-2xl tracking-tight mt-4">
-                    ₹11,26,340
+                    {formatINR(totalExpenses.toString())}
                   </div>
-                  <div className="text-primary text-xs mt-2">
-                    -4.2%
+                  <div className={`text-xs mt-2 ${expensesDelta?.startsWith('-') ? 'text-primary' : 'text-error-600'}`}>
+                    {expensesDelta ?? '—'}
                     <span className="text-muted-foreground">vs last month</span>
                   </div>
                 </Card>
@@ -235,10 +535,10 @@ export default function ExecutiveOverview() {
                     </span>
                   </div>
                   <div className="font-semibold text-2xl tracking-tight mt-4">
-                    ₹2,84,760
+                    {formatINR(gstLiability.toString())}
                   </div>
                   <div className="text-muted-foreground text-xs mt-2">
-                    Due in 6 days
+                    {gstDueText}
                   </div>
                 </Card>
                 <Card className="p-5">
@@ -248,10 +548,10 @@ export default function ExecutiveOverview() {
                     </span>
                   </div>
                   <div className="font-semibold text-2xl tracking-tight mt-4">
-                    ₹9,68,410
+                    {formatINR(cashBalance.toString())}
                   </div>
                   <div className="text-muted-foreground text-xs mt-2">
-                    Updated 10 min ago
+                    Updated just now
                   </div>
                 </Card>
               </div>
@@ -285,14 +585,7 @@ export default function ExecutiveOverview() {
                     className="mt-6 w-full h-64"
                   >
                     <RechartsAreaChart
-                      data={[
-                        { month: 'Jan', revenue: 248000, expenses: 172000 },
-                        { month: 'Feb', revenue: 286000, expenses: 184000 },
-                        { month: 'Mar', revenue: 264000, expenses: 193000 },
-                        { month: 'Apr', revenue: 318000, expenses: 205000 },
-                        { month: 'May', revenue: 342000, expenses: 221000 },
-                        { month: 'Jun', revenue: 386000, expenses: 251000 },
-                      ]}
+                      data={cashFlowSeries}
                     >
                       <CartesianGrid vertical={false} />
                       <XAxis
@@ -323,31 +616,33 @@ export default function ExecutiveOverview() {
                   </ChartContainer>
                 </Card>
                 <Card className="p-6">
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-center">
                     <div>
                       <h2 className="font-semibold text-base">
                         GST filing status
                       </h2>
                       <p className="text-muted-foreground text-xs mt-1">
-                        GSTR-3B · June 2024
+                        GSTR-3B · Current period
                       </p>
                     </div>
                     <span className="font-medium rounded-md bg-primary/10 text-primary text-xs px-2 py-1">
-                      In progress
+                      {filingReady ? 'Ready for review' : 'In progress'}
                     </span>
                   </div>
                   <div className="flex mt-8 justify-between items-end">
                     <span className="text-muted-foreground text-sm">
                       Completion
                     </span>
-                    <span className="font-semibold text-lg">72%</span>
+                    <span className="font-semibold text-lg">{filingCompletion}%</span>
                   </div>
                   <div className="rounded-full bg-muted mt-3 w-full h-2">
-                    <div className="rounded-full bg-primary w-[72%] h-2" />
+                    <div className="rounded-full bg-primary h-2" style={{ width: `${filingCompletion}%` }} />
                   </div>
                   <div className="text-sm flex mt-6 justify-between items-center">
                     <span className="text-muted-foreground">Due date</span>
-                    <span className="font-medium">20 Jul 2024</span>
+                    <span className="font-medium">
+                      {gstDueDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </span>
                   </div>
                   <Button
                     className="mt-6 w-full"
@@ -372,46 +667,26 @@ export default function ExecutiveOverview() {
                     </Button>
                   </div>
                   <div className="mt-5">
-                    <div className="border-t border-r border-b border-b-border border-l-border flex py-3 justify-between items-center">
-                      <div>
-                        <div className="font-medium text-sm">
-                          Razorpay settlement
+                    {transactions.slice(0, 4).map((txn) => (
+                      <div key={txn.id} className="border-t border-r border-b border-b-border border-l-border flex py-3 justify-between items-center">
+                        <div>
+                          <div className="font-medium text-sm">
+                            {txn.description || 'Transaction'}
+                          </div>
+                          <div className="text-muted-foreground text-xs mt-1">
+                            {txn.source || 'Bank'} · {txn.transaction_date ? new Date(txn.transaction_date).toLocaleDateString('en-IN') : ''}
+                          </div>
                         </div>
-                        <div className="text-muted-foreground text-xs mt-1">
-                          Sales · 24 Jun 2024
-                        </div>
+                        <span className="font-medium text-sm">
+                          {formatINR(txn.amount || '0')}
+                        </span>
                       </div>
-                      <span className="font-medium text-sm">₹86,400</span>
-                    </div>
-                    <div className="border-t border-r border-b border-b-border border-l-border flex py-3 justify-between items-center">
-                      <div>
-                        <div className="font-medium text-sm">AWS India</div>
-                        <div className="text-muted-foreground text-xs mt-1">
-                          Software · 22 Jun 2024
-                        </div>
+                    ))}
+                    {transactions.length === 0 && (
+                      <div className="py-3 text-center text-xs text-text-tertiary">
+                        No transactions yet. Import your bank statement to get started.
                       </div>
-                      <span className="font-medium text-sm">₹42,180</span>
-                    </div>
-                    <div className="border-t border-r border-b border-b-border border-l-border flex py-3 justify-between items-center">
-                      <div>
-                        <div className="font-medium text-sm">Office lease</div>
-                        <div className="text-muted-foreground text-xs mt-1">
-                          Rent · 20 Jun 2024
-                        </div>
-                      </div>
-                      <span className="font-medium text-sm">₹1,20,000</span>
-                    </div>
-                    <div className="flex py-3 justify-between items-center">
-                      <div>
-                        <div className="font-medium text-sm">
-                          ICICI bank transfer
-                        </div>
-                        <div className="text-muted-foreground text-xs mt-1">
-                          Banking · 18 Jun 2024
-                        </div>
-                      </div>
-                      <span className="font-medium text-sm">₹2,50,000</span>
-                    </div>
+                    )}
                   </div>
                 </Card>
                 <Card className="p-6">
@@ -419,32 +694,54 @@ export default function ExecutiveOverview() {
                     Tasks to keep moving
                   </h2>
                   <div className="flex mt-5 flex-col gap-2">
-                    <div className="rounded-md border border-border flex px-4 py-3 items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm">
-                          Match 12 bank transactions
+                    {unmatchedCount > 0 && (
+                      <div
+                        onClick={() => router.push('/reconciliation')}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter') router.push('/reconciliation'); }}
+                        className="cursor-pointer rounded-md border border-border flex px-4 py-3 items-center gap-3 hover:bg-muted/40 transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">
+                            Match {unmatchedCount} bank transactions
+                          </div>
+                          <span className="font-medium rounded-md bg-primary/10 text-primary text-xs inline-flex mt-1 px-2 py-1">
+                            To do
+                          </span>
                         </div>
-                        <span className="font-medium rounded-md bg-primary/10 text-primary text-xs inline-flex mt-1 px-2 py-1">
-                          To do
-                        </span>
+                        <ChevronRight className="text-muted-foreground size-4" />
                       </div>
-                      <ChevronRight className="text-muted-foreground size-4" />
-                    </div>
-                    <div className="rounded-md border border-border flex px-4 py-3 items-center gap-3">
+                    )}
+                    {pendingReviewCount > 0 && (
+                      <div
+                        onClick={() => router.push('/review')}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter') router.push('/review'); }}
+                        className="cursor-pointer rounded-md border border-border flex px-4 py-3 items-center gap-3 hover:bg-muted/40 transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">
+                            Review {pendingReviewCount} invoices
+                          </div>
+                          <span className="font-medium rounded-md bg-muted text-muted-foreground text-xs inline-flex mt-1 px-2 py-1">
+                            Pending
+                          </span>
+                        </div>
+                        <ChevronRight className="text-muted-foreground size-4" />
+                      </div>
+                    )}
+                    <div
+                      onClick={() => router.push('/documents')}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter') router.push('/documents'); }}
+                      className="cursor-pointer rounded-md border border-border flex px-4 py-3 items-center gap-3 hover:bg-muted/40 transition-colors"
+                    >
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm">
                           Upload purchase invoices
-                        </div>
-                        <span className="font-medium rounded-md bg-muted text-muted-foreground text-xs inline-flex mt-1 px-2 py-1">
-                          Pending
-                        </span>
-                      </div>
-                      <ChevronRight className="text-muted-foreground size-4" />
-                    </div>
-                    <div className="rounded-md border border-border flex px-4 py-3 items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm">
-                          Review GST exceptions
                         </div>
                         <span className="font-medium rounded-md bg-muted text-muted-foreground text-xs inline-flex mt-1 px-2 py-1">
                           Pending
@@ -456,12 +753,132 @@ export default function ExecutiveOverview() {
                 </Card>
               </div>
               <p className="text-muted-foreground text-xs mt-8">
-                Sample data · Last synced 10 minutes ago
+                Live data · synced from your business records
               </p>
             </div>
           </main>
         </div>
       </div>
     </div>
+  );
+}
+
+function AccountMenuPanel({
+  variant,
+  ownerEmail,
+  deleteStage,
+  deleteConfirmText,
+  deletingAccount,
+  accountError,
+  onClose,
+  onStartDelete,
+  onDelete,
+  onLogout,
+  onConfirmTextChange,
+}: {
+  variant: 'sidebar' | 'header';
+  ownerEmail: string | null;
+  deleteStage: 'idle' | 'confirm';
+  deleteConfirmText: string;
+  deletingAccount: boolean;
+  accountError: string | null;
+  onClose: () => void;
+  onStartDelete: () => void;
+  onDelete: () => void;
+  onLogout: () => void;
+  onConfirmTextChange: (value: string) => void;
+}) {
+  const position =
+    variant === 'sidebar'
+      ? 'absolute left-3 right-3 bottom-2 z-30'
+      : 'fixed top-16 right-4 z-30 w-80';
+
+  return (
+    <>
+      <div className="fixed inset-0 z-20" onClick={onClose} aria-hidden="true" />
+      <div
+        role="menu"
+        aria-label="Account options"
+        className={`${position} rounded-xl border border-border bg-card shadow-lg p-4`}
+      >
+        <div className="flex items-center gap-3 pb-3 border-b border-border">
+          <span className="font-medium rounded-full bg-primary text-primary-foreground text-xs flex justify-center items-center shrink-0 size-8">
+            {(ownerEmail || '').slice(0, 1).toUpperCase() || 'A'}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground truncate">
+              {ownerEmail || 'Signed in'}
+            </p>
+            <p className="text-xs text-muted-foreground">Account options</p>
+          </div>
+        </div>
+
+        {deleteStage === 'idle' ? (
+          <div className="flex flex-col pt-2 gap-1">
+            <button
+              role="menuitem"
+              onClick={onLogout}
+              className="rounded-md text-sm flex px-3 items-center gap-3 h-10 text-foreground hover:bg-accent"
+            >
+              <LogOut className="size-4 text-muted-foreground" />
+              <span>Log out</span>
+            </button>
+            <button
+              role="menuitem"
+              onClick={onStartDelete}
+              className="rounded-md text-sm flex px-3 items-center gap-3 h-10 text-error-600 dark:text-error-400 hover:bg-error-50 dark:hover:bg-error-500/10"
+            >
+              <Trash2 className="size-4" />
+              <span>Delete account</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col pt-3 gap-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="size-4 text-error-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-foreground leading-5">
+                This permanently deletes your account, your business(es), invoices,
+                transactions, documents and GST summaries. The compliance audit log is
+                retained. Accounts with audit or import records cannot be deleted
+                automatically and will be directed to support. This cannot be undone.
+              </p>
+            </div>
+            <input
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+              placeholder="Type DELETE to confirm"
+              value={deleteConfirmText}
+              onChange={(e) => onConfirmTextChange(e.target.value)}
+              disabled={deletingAccount}
+              autoFocus
+            />
+            {accountError && (
+              <div className="p-2 rounded-md bg-error-50 dark:bg-error-500/10 border border-error-200 dark:border-error-800 text-xs text-error-700 dark:text-error-400">
+                <p>{accountError}</p>
+                <Link
+                  href="/faq"
+                  className="font-medium underline underline-offset-2 mt-1 inline-block"
+                >
+                  Go to Help &amp; support
+                </Link>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={onDelete}
+                disabled={deleteConfirmText !== 'DELETE' || deletingAccount}
+                isLoading={deletingAccount}
+                className="bg-error-600 hover:bg-error-700 text-white"
+              >
+                {deletingAccount ? 'Deleting…' : 'Delete account'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={onClose} disabled={deletingAccount}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }

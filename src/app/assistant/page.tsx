@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { useTheme } from '@/lib/theme-provider';
 import { escapeHtml } from '@/lib/security/xss-sanitizer';
 import { money } from '@/lib/decimal';
 import {
@@ -17,6 +16,7 @@ import {
   Copy,
   ChevronRight,
   Bot,
+  AlertCircle,
 } from 'lucide-react';
 import { askGnaniEvon, GnaniMessage } from '@/lib/ai/gnani';
 
@@ -84,7 +84,6 @@ function MessageBubble({ message, isUser }: MessageBubbleProps) {
 }
 
 export default function AssistantPage() {
-  const { resolvedTheme } = useTheme();
   const [messages, setMessages] = useState<GnaniMessage[]>([
     {
       role: 'assistant',
@@ -95,51 +94,66 @@ export default function AssistantPage() {
   const [language, setLanguage] = useState<'en' | 'hi' | 'bn' | 'mr'>('en');
   const [isThinking, setIsThinking] = useState(false);
   const [shopContext, setShopContext] = useState<AssistantContext | null>(null);
+  const [contextError, setContextError] = useState<string | null>(null);
+  const [contextLoading, setContextLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  [resolvedTheme];
 
   useEffect(() => {
     loadShopContext();
   }, []);
 
   async function loadShopContext() {
+    setContextLoading(true);
+    setContextError(null);
     try {
       const res = await fetch('/api/shops');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.shop) {
-          const [invRes] = await Promise.all([fetch('/api/invoices'), fetch('/api/transactions')]);
-          const invData = await invRes.json();
-          const invoices = Array.isArray(invData.invoices)
-            ? (invData.invoices as { amount_due?: string }[])
-            : [];
-          const openDue = invoices.reduce(
-            (acc, i) => acc.plus(money(i.amount_due || '0')),
-            money(0)
-          );
-          setShopContext({
-            shopName: data.shop.name,
-            gstin: data.shop.gstin,
-            state: data.shop.state || 'Maharashtra',
-            taxpayerScheme: data.shop.taxpayer_scheme || 'regular',
-            unreconciledCount: 0,
-            openInvoicesTotal: openDue.toString(),
-            currentPeriod: 'Current Month',
-            shopId: data.shop.id,
-            userId: data.userId || 'unknown',
-          });
-        }
+      if (!res.ok) {
+        setContextError(
+          res.status === 401
+            ? 'Please sign in so GNANI can load your business context.'
+            : 'Sign in and complete business onboarding to use the AI assistant.'
+        );
+        return;
       }
+      const data = await res.json();
+      if (!data?.shop) {
+        setContextError('Sign in and complete business onboarding to use the AI assistant.');
+        return;
+      }
+      const [invRes, reconRes] = await Promise.all([fetch('/api/invoices'), fetch('/api/reconciliation')]);
+      const invData = await invRes.json();
+      const invoices = Array.isArray(invData.invoices)
+        ? (invData.invoices as { amount_due?: string }[])
+        : [];
+      const openDue = invoices.reduce(
+        (acc, i) => acc.plus(money(i.amount_due || '0')),
+        money(0)
+      );
+      let unreconciledCount = 0;
+      if (reconRes.ok) {
+        const reconData = await reconRes.json();
+        unreconciledCount = Array.isArray(reconData.suggestions) ? reconData.suggestions.length : 0;
+      }
+      const now = new Date();
+      const periodLabel = now.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+      setShopContext({
+        shopName: data.shop.name,
+        gstin: data.shop.gstin,
+        state: data.shop.state || '',
+        taxpayerScheme: data.shop.taxpayer_scheme || 'regular',
+        unreconciledCount,
+        openInvoicesTotal: openDue.toString(),
+        currentPeriod: periodLabel,
+        shopId: data.shop.id,
+        userId: data.userId || 'unknown',
+      });
     } catch {
-      // Error handled silently
+      setContextError('Could not load your business context. Check your connection and retry.');
+    } finally {
+      setContextLoading(false);
     }
   }
-
-  useEffect(() => {
-    const timer = setTimeout(() => loadShopContext(), 0);
-    return () => clearTimeout(timer);
-  }, []);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -262,11 +276,23 @@ export default function AssistantPage() {
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
-              {!shopContext && (
-                <p className="mt-2 text-xs text-text-tertiary">
-                  Loading business context…
-                </p>
-              )}
+              {!shopContext &&
+                (contextError ? (
+                  <div className="mt-2 flex items-center gap-2 text-xs">
+                    <AlertCircle className="h-3.5 w-3.5 text-error-600 shrink-0" />
+                    <span className="text-error-700 dark:text-error-400">{contextError}</span>
+                    <button
+                      onClick={() => loadShopContext()}
+                      className="font-semibold text-primary-600 hover:text-primary-500 dark:hover:text-primary-400"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-text-tertiary">
+                    Loading business context…
+                  </p>
+                ))}
             </form>
 
             <div className="mt-4 flex flex-wrap gap-2">

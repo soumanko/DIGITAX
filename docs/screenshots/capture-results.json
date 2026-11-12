@@ -1,0 +1,62 @@
+[
+  {
+    "name": "01-landing",
+    "ok": true,
+    "file": "D:\\DIGITAX\\docs\\screenshots\\01-landing.png",
+    "finalUrl": "http://localhost:3000/"
+  },
+  {
+    "name": "02-login-empty",
+    "ok": true,
+    "file": "D:\\DIGITAX\\docs\\screenshots\\02-login-empty.png",
+    "finalUrl": "http://localhost:3000/login"
+  },
+  {
+    "name": "03-login-invalid-credentials",
+    "ok": true,
+    "file": "D:\\DIGITAX\\docs\\screenshots\\03-login-invalid-credentials.png",
+    "finalUrl": "http://localhost:3000/login"
+  },
+  {
+    "name": "04-protected-redirect-invoices",
+    "ok": true,
+    "file": "D:\\DIGITAX\\docs\\screenshots\\04-protected-redirect-invoices.png",
+    "finalUrl": "http://localhost:3000/login?redirect=%2Finvoices"
+  },
+  {
+    "name": "05-register",
+    "ok": true,
+    "file": "D:\\DIGITAX\\docs\\screenshots\\05-register.png",
+    "finalUrl": "http://localhost:3000/register"
+  },
+  {
+    "name": "06-reset-password",
+    "ok": true,
+    "file": "D:\\DIGITAX\\docs\\screenshots\\06-reset-password.png",
+    "finalUrl": "http://localhost:3000/reset-password"
+  },
+  {
+    "name": "07-how-it-works",
+    "ok": true,
+    "file": "D:\\DIGITAX\\docs\\screenshots\\07-how-it-works.png",
+    "finalUrl": "http://localhost:3000/how-it-works"
+  },
+  {
+    "name": "08-faq",
+    "ok": true,
+    "file": "D:\\DIGITAX\\docs\\screenshots\\08-faq.png",
+    "finalUrl": "http://localhost:3000/faq"
+  },
+  {
+    "name": "09-security",
+    "ok": true,
+    "file": "D:\\DIGITAX\\docs\\screenshots\\09-security.png",
+    "finalUrl": "http://localhost:3000/security"
+  },
+  {
+    "name": "10-404",
+    "ok": true,
+    "file": "D:\\DIGITAX\\docs\\screenshots\\10-404.png",
+    "finalUrl": "http://localhost:3000/this-route-does-not-exist"
+  }
+]

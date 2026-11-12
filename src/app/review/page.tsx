@@ -6,8 +6,8 @@ import { AppShell } from '@/components/layout/app-shell';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DEMO_INVOICES, DEMO_TRANSACTIONS } from '@/lib/demo-data';
 import { formatINR } from '@/lib/decimal';
+import { useToast } from '@/components/ui/toast';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -20,22 +20,67 @@ import {
   ArrowRight
 } from 'lucide-react';
 
+interface ReviewInvoice {
+  id: string;
+  invoice_number: string;
+  supplier_legal_name: string;
+  supplier_gstin: string;
+  taxable_value: string;
+  cgst_amount: string;
+  cgst_total: string;
+  sgst_amount: string;
+  sgst_total: string;
+  total_amount: string;
+  extraction_confidence: number;
+  needs_review_reasons: string[];
+  review_state: string;
+}
+
+interface AuditEntry {
+  timestamp: string;
+  actor: string;
+  record: string;
+  status: string;
+}
+
 export default function ReviewCenterPage() {
-  const [invoices, setInvoices] = useState(DEMO_INVOICES);
-  const [resolvedIds, setResolvedIds] = useState<string[]>([]);
+  const { showToast } = useToast();
+  const [invoices, setInvoices] = useState<ReviewInvoice[]>([]);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
 
   useEffect(() => {
     async function loadInvoices() {
+      setLoading(true);
+      setLoadError(null);
       try {
         const res = await fetch('/api/invoices');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.invoices) && data.invoices.length > 0) {
-            setInvoices(data.invoices);
-          }
+        if (!res.ok) {
+          setLoadError(res.status === 401 ? 'Please sign in to review your invoices.' : 'Failed to load the review queue. Please try again.');
+          setInvoices([]);
+          setLoading(false);
+          return;
+        }
+        const data = await res.json();
+        setInvoices(Array.isArray(data.invoices) ? data.invoices : []);
+        // Resolve the signed-in user so audit rows name the real actor
+        try {
+          const { createClient } = await import('@/lib/supabase/client');
+          const supabase = createClient();
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData?.user?.email) setUserEmail(userData.user.email);
+        } catch {
+          // Email display only — review actions still work without it
         }
       } catch (err) {
         console.warn('Could not load invoices for review:', err);
+        setLoadError('Failed to load the review queue. Please try again.');
+        setInvoices([]);
+      } finally {
+        setLoading(false);
       }
     }
     loadInvoices();
@@ -44,19 +89,61 @@ export default function ReviewCenterPage() {
   const pendingInvoices = invoices.filter(
     (inv) =>
       (inv.review_state === 'pending_review' ||
-        (inv.needs_review_reasons && inv.needs_review_reasons.length > 0)) &&
-      !resolvedIds.includes(inv.id)
+        (inv.needs_review_reasons && inv.needs_review_reasons.length > 0))
   );
 
-  const handleResolve = (invId: string) => {
-    setResolvedIds([...resolvedIds, invId]);
-    setInvoices(
-      invoices.map((inv) =>
-        inv.id === invId
-          ? { ...inv, review_state: 'confirmed', needs_review_reasons: [] }
-          : inv
-      )
-    );
+  const handleResolve = async (invId: string) => {
+    setConfirmingId(invId);
+    try {
+      const res = await fetch(`/api/invoices/${invId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ review_state: 'confirmed' }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToast({
+          type: 'error',
+          title: 'Confirmation failed',
+          description: data.error || `The server rejected this confirmation (HTTP ${res.status}).`,
+        });
+        return;
+      }
+
+      // Server persisted the review state change and wrote an immutable
+      // audit_events row — reflect it locally.
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === invId
+            ? { ...inv, review_state: 'confirmed', needs_review_reasons: [] }
+            : inv
+        )
+      );
+      const confirmed = invoices.find((inv) => inv.id === invId);
+      setAuditLog((prev) => [
+        {
+          timestamp: new Date().toLocaleString('en-IN', { hour12: false }),
+          actor: userEmail || 'Signed-in user',
+          record: `Invoice #${confirmed?.invoice_number || invId} (${confirmed?.supplier_legal_name || ''})`,
+          status: 'Confirmed (Audit OK)',
+        },
+        ...prev,
+      ]);
+      showToast({
+        type: 'success',
+        title: 'Record confirmed',
+        description: 'An immutable audit event was recorded for this invoice.',
+      });
+    } catch {
+      showToast({
+        type: 'error',
+        title: 'Confirmation failed',
+        description: 'Network error — the record was NOT confirmed. Please try again.',
+      });
+    } finally {
+      setConfirmingId(null);
+    }
   };
 
   return (
@@ -80,6 +167,14 @@ export default function ReviewCenterPage() {
             </Badge>
           </div>
         </div>
+
+        {/* Load error state */}
+        {loadError && (
+          <div className="p-3 rounded-lg bg-error-50 dark:bg-error-50/20 border border-error-200 dark:border-error-800 text-xs text-error-700 dark:text-error-400 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>{loadError}</span>
+          </div>
+        )}
 
         {/* Review Queue Cards */}
         {pendingInvoices.length > 0 ? (
@@ -147,10 +242,11 @@ export default function ReviewCenterPage() {
                         variant="primary"
                         size="sm"
                         onClick={() => handleResolve(inv.id)}
+                        disabled={confirmingId === inv.id}
                         className="text-xs"
                       >
                         <Check className="h-3.5 w-3.5 mr-1" />
-                        Verify & Confirm Record
+                        {confirmingId === inv.id ? 'Confirming…' : 'Verify & Confirm Record'}
                       </Button>
                     </div>
                   </div>
@@ -196,18 +292,22 @@ export default function ReviewCenterPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                <tr>
-                  <td className="px-4 py-3 font-mono text-text-secondary">2026-10-15 11:20 IST</td>
-                  <td className="px-4 py-3 font-medium text-text-primary">Shop Owner (Rajesh S.)</td>
-                  <td className="px-4 py-3 font-mono">Invoice #APX/2026/881 (Apex Wholesale)</td>
-                  <td className="px-4 py-3"><Badge variant="success">Confirmed (Audit OK)</Badge></td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 font-mono text-text-secondary">2026-10-15 10:15 IST</td>
-                  <td className="px-4 py-3 font-medium text-text-primary">Shop Owner (Rajesh S.)</td>
-                  <td className="px-4 py-3 font-mono">Invoice #HUL/MUM/77321 (HUL Depot)</td>
-                  <td className="px-4 py-3"><Badge variant="success">Confirmed (Audit OK)</Badge></td>
-                </tr>
+                {auditLog.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-6 text-center text-text-tertiary">
+                      No verification actions recorded yet. Confirmations below are written to the immutable audit trail as they happen.
+                    </td>
+                  </tr>
+                ) : (
+                  auditLog.map((entry, idx) => (
+                    <tr key={idx}>
+                      <td className="px-4 py-3 font-mono text-text-secondary">{entry.timestamp}</td>
+                      <td className="px-4 py-3 font-medium text-text-primary">{entry.actor}</td>
+                      <td className="px-4 py-3 font-mono">{entry.record}</td>
+                      <td className="px-4 py-3"><Badge variant="success">{entry.status}</Badge></td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </CardContent>

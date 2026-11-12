@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server';
 import { generateGSTPeriodSummary } from '@/lib/gst/calculator';
 import { rateLimiters, rateLimitResponse } from '@/lib/rate-limiter';
 import { csrfMiddleware } from '@/lib/security/csrf';
-import { DEMO_SHOP, DEMO_INVOICES } from '@/lib/demo-data';
 import type { Invoice } from '@/types';
 
 export async function GET(request: NextRequest) {
@@ -13,16 +12,9 @@ export async function GET(request: NextRequest) {
     const year = parseInt(searchParams.get('year') || '2026', 10);
     const month = parseInt(searchParams.get('month') || '10', 10);
 
-    const isDemoCookie = request.cookies.get('dx_demo_session')?.value === 'true';
-    const isDev = process.env.NODE_ENV !== 'production';
-
     const ctx = await getAuthenticatedContext();
 
     if (!ctx.userId) {
-      if (isDemoCookie && isDev) {
-        const summary = generateGSTPeriodSummary(DEMO_SHOP.id, year, month, DEMO_INVOICES);
-        return NextResponse.json({ summary, isDemo: true, shop: DEMO_SHOP });
-      }
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -36,7 +28,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ summary, isDemo: false, shop: ctx.shop });
   } catch (err) {
     console.error('Error calculating GST summary:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -60,8 +52,25 @@ export async function POST(request: NextRequest) {
       return csrfResult.response as Response;
     }
 
+    // Financial integrity: the summary is ALWAYS recomputed server-side from
+    // the shop's own invoices using the GST engine — client-supplied summary
+    // payloads are never persisted (tamper-resistant). Only period params are
+    // accepted from the request.
     const body = await request.json();
-    const { year, month, summary } = body;
+    const year = Number(body?.year);
+    const month = Number(body?.month);
+
+    if (!Number.isInteger(year) || year < 2017 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12) {
+      return NextResponse.json({ error: 'Valid year (integer) and month (1-12) are required' }, { status: 400 });
+    }
+
+    const invoices = await getShopInvoicesServer(ctx.shop.id);
+    const computed = generateGSTPeriodSummary(ctx.shop.id, year, month, invoices as unknown as Invoice[]);
+
+    const toMoney = (v: string | number | undefined): number => {
+      const n = parseFloat(String(v ?? 0));
+      return Number.isFinite(n) ? n : 0;
+    };
 
     const supabase = await createClient();
     const periodStr = `${String(month).padStart(2, '0')}${year}`;
@@ -73,23 +82,23 @@ export async function POST(request: NextRequest) {
         financial_year: `${year}-${year + 1}`,
         tax_period: periodStr,
         status: 'draft',
-        calculation_version: '1.0.0',
-        engine_version: '1.0.0',
-        ruleset_version: '2026.1',
-        taxable_sales: parseFloat(summary.gstr1.totalTaxableValue),
-        output_cgst: parseFloat(summary.gstr3b.outward_supplies.cgst),
-        output_sgst: parseFloat(summary.gstr3b.outward_supplies.sgst),
-        output_igst: parseFloat(summary.gstr3b.outward_supplies.igst),
-        output_cess: parseFloat(summary.gstr3b.outward_supplies.cess),
+        calculation_version: computed.calculationVersion,
+        engine_version: computed.calculationVersion,
+        ruleset_version: computed.rulesetVersion,
+        taxable_sales: toMoney(computed.gstr1.totalTaxableValue),
+        output_cgst: toMoney(computed.gstr3b.outward_supplies.cgst),
+        output_sgst: toMoney(computed.gstr3b.outward_supplies.sgst),
+        output_igst: toMoney(computed.gstr3b.outward_supplies.igst),
+        output_cess: toMoney(computed.gstr3b.outward_supplies.cess),
         taxable_purchases: 0,
-        input_cgst: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.cgst),
-        input_sgst: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.sgst),
-        input_igst: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.igst),
-        input_cess: parseFloat(summary.gstr3b.eligible_itc.net_itc_available.cess),
-        net_tax_liability: parseFloat(summary.netTaxPayable.total),
-        details: summary,
-        source_record_counts: { invoices: 0, transactions: 0 },
-        invoices_included: 0,
+        input_cgst: toMoney(computed.gstr3b.eligible_itc.net_itc_available.cgst),
+        input_sgst: toMoney(computed.gstr3b.eligible_itc.net_itc_available.sgst),
+        input_igst: toMoney(computed.gstr3b.eligible_itc.net_itc_available.igst),
+        input_cess: toMoney(computed.gstr3b.eligible_itc.net_itc_available.cess),
+        net_tax_liability: toMoney(computed.netTaxPayable.total),
+        details: computed as unknown as Record<string, unknown>,
+        source_record_counts: { invoices: invoices.length, transactions: 0 },
+        invoices_included: invoices.length,
         transactions_included: 0,
         unresolved_issues: 0,
         warnings: [],
@@ -108,12 +117,16 @@ export async function POST(request: NextRequest) {
       action: 'gst_summary_saved',
       entityType: 'gst_summary',
       entityId: data.id,
-      metadata: { period: periodStr, netPayable: summary.netTaxPayable.total },
+      metadata: {
+        period: periodStr,
+        netPayable: computed.netTaxPayable.total,
+        recomputed_server_side: true,
+      },
     });
 
     return NextResponse.json({ summary: data, success: true }, { status: 201 });
   } catch (err) {
     console.error('Error saving GST summary:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to save GST summary' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to save GST summary' }, { status: 500 });
   }
 }

@@ -84,7 +84,7 @@ export async function PATCH(
 
     if (updateError) {
       console.error('Error updating document:', updateError);
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to update document' }, { status: 500 });
     }
 
     // Log audit event
@@ -112,6 +112,6 @@ export async function PATCH(
       );
     }
     console.error('Error updating document:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

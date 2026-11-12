@@ -246,6 +246,31 @@ export const csvColumnMappingSchema = z.object({
   date_format: z.string().default('DD/MM/YYYY'),
 });
 
+/**
+ * A single transaction as accepted by POST /api/transactions (bank-import or
+ * manual expense-capture capture). Amounts are non-negative decimal strings;
+ * money flow direction is expressed separately through `direction`.
+ */
+export const bankTransactionInputSchema = z.object({
+  transaction_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid transaction date (expected YYYY-MM-DD)'),
+  value_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid value date (expected YYYY-MM-DD)').optional(),
+  description: z.string().min(1, 'Description is required').max(500, 'Description too long'),
+  amount: moneyStringSchema,
+  direction: z.enum(['credit', 'debit'], { message: 'Direction must be credit or debit' }),
+  category: transactionCategorySchema.optional(),
+  source: z.string().max(50).optional(),
+  source_account: z.string().max(100).optional(),
+  bank_account_name: z.string().max(100).optional(),
+  reference_number: z.string().max(100).optional(),
+});
+
+export const importTransactionsSchema = z.object({
+  transactions: z.array(bankTransactionInputSchema).min(1, 'At least one transaction is required').max(2000, 'Import batch too large (max 2000 rows)'),
+}).passthrough();
+
+export type BankTransactionInput = z.infer<typeof bankTransactionInputSchema>;
+export type ImportTransactionsInput = z.infer<typeof importTransactionsSchema>;
+
 // ============================================
 // Reconciliation Schemas
 // ============================================

@@ -1,0 +1,100 @@
+    <!-- Scene 2: Dashboard -->
+    <section class="scene dashboard" data-scene="2">
+      <div class="app-shell">
+        <div class="topbar">
+          <div class="tb-left">
+            <div class="tb-brand">
+              <svg class="brandmark" viewBox="0 0 32 32" fill="none"><rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="#2563eb"/><path d="M10 21.5 16 10l6 11.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIGITAX</span>
+            </div>
+            <div class="tb-div"></div>
+          </div>
+          <div class="tb-right">
+            <button class="btn sm ghost">Export</button>
+          </div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar">
+            <div class="sb-section">
+              <div class="sb-label">Navigation</div>
+              <div class="sb-items">
+                <div class="sb-item active"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M3 12v5l2 2m0 0l7 7 7-7M3 12V7l2-2"/></svg><span>Dashboard</span><span class="count">1</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-3v4c0 6-4 10-10 10H2c-6 0-10-4-10-10V2c0-6 4-10 10-10h3v4c0 6 4 10 10 10s10-4 10-10V3c0-6-4-10-10-10"/></svg><span>Transactions</span><span class="count">3</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>GST</span><span class="count">2</span></a></div>
+                <div class="sb-item"><a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="9"/><line x1="12" y1="20" x2="12" y2="13"/><line x1="6" y1="20" x2="6" y2="2z"/></svg><span>Reconciliation</span><span class="count">23</span></a></div>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="page">
+              <div class="pagehead">
+                <div>
+                  <h1>Dashboard</h1>
+                  <p class="desc">Your business snapshot for October 2026</p>
+                </div>
+                <div class="actions">
+                  <button class="btn">Upload Document</button>
+                </div>
+              </div>
+              <div class="kpi-grid">
+                <div class="kpi-card revenue-card">
+                  <div class="kpi-header">
+                    <span class="kpi-label">Total Revenue</span>
+                    <span class="trend-up">+12.8%</span>
+                  </div>
+                  <div class="kpi-value">₹18,42,600</div>
+                  <div class="kpi-subtitle">Outward supplies · Sales invoices</div>
+                </div>
+                <div class="kpi-card expense-card">
+                  <div class="kpi-header">
+                    <span class="kpi-label">Total Expenses</span>
+                    <span class="trend-down">−4.2%</span>
+                  </div>
+                  <div class="kpi-value">₹11,26,340</div>
+                  <div class="kpi-subtitle">Inward supplies · Purchase invoices</div>
+                </div>
+                <div class="kpi-card gst-card">
+                  <div class="kpi-header">
+                    <span class="kpi-label">GST Liability</span>
+                    <span class="trend-up">Due in 6 days</span>
+                  </div>
+                  <div class="kpi-value">₹2,84,760</div>
+                  <div class="kpi-subtitle">Input Tax Credit · Net Liability</div>
+                </div>
+                <div class="kpi-card balance-card">
+                  <div class="kpi-header">
+                    <span class="kpi-label">Cash Balance</span>
+                    <span class="trend-neutral">Updated 10 min ago</span>
+                  </div>
+                  <div class="kpi-value">₹9,68,410</div>
+                  <div class="kpi-subtitle">ICICI Current Account</div>
+                </div>
+              </div>
+              <div class="chart-section">
+                <div class="chart-card">
+                  <div class="chart-header">
+                    <h3 class="chart-title">Revenue vs Expenses</h3>
+                    <div class="chart-period">
+                      <span class="period-label">6 months</span>
+                      <span class="chart-legend">
+                        <span class="legend-dot revenue"></span>Revenue
+                        <span class="legend-dot expense"></span>Expenses
+                      </span>
+                    </div>
+                  </div>
+                  <div class="chart-container">
+                    <div class="chart-placeholder">
+                      <svg viewBox="0 0 600 260">
+                        <polyline points="50,180 120,120 190,200 260,100 330,160 400,80 470,120 540,150 600,100" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M50,240 L50,180 L120,120 L190,200 L260,100 L330,160 L400,80 L470,120 L540,150 L600,100 L600,240 Z" fill="url(#revenue-gradient)"/>
+                        <linearGradient id="revenue-gradient" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#2563eb" stop-opacity="0.2"/><stop offset="100%" stop-color="#2563eb" stop-opacity="0"/></linearGradient>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>

@@ -10,8 +10,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { useTheme } from '@/lib/theme-provider';
 import { escapeHtml } from '@/lib/security/xss-sanitizer';
+import { useToast } from '@/components/ui/toast';
 import { money } from '@/lib/decimal';
 import { Invoice } from '@/types';
 import {
@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Eye,
   Trash2,
+  AlertCircle,
 } from 'lucide-react';
 
 function InvoiceStatusBadge({ status }: { status: string }) {
@@ -55,15 +56,16 @@ function InvoiceTypeBadge({ type }: { type: string }) {
 }
 
 export default function InvoicesPage() {
-  const { resolvedTheme } = useTheme();
   const router = useRouter();
+  const { showToast } = useToast();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  [resolvedTheme];
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const statusOptions = [
     { label: 'Paid', value: 'paid' },
@@ -76,28 +78,66 @@ export default function InvoicesPage() {
     { label: 'Purchase', value: 'purchase_tax_invoice' },
   ];
 
-  useEffect(() => {
-    loadInvoices();
-  }, []);
-
   async function loadInvoices() {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch('/api/invoices');
-      if (res.ok) {
-        const data = await res.json();
-        setInvoices(Array.isArray(data.invoices) ? data.invoices : []);
+      if (!res.ok) {
+        setLoadError(
+          res.status === 401
+            ? 'Please sign in to view your invoices.'
+            : `Could not load invoices (HTTP ${res.status}). Please try again.`
+        );
+        setInvoices([]);
+        return;
       }
+      const data = await res.json();
+      setInvoices(Array.isArray(data.invoices) ? data.invoices : []);
     } catch {
-      // Error handled by empty state
+      setLoadError('Network error while loading invoices. Please check your connection and retry.');
+      setInvoices([]);
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleDeleteInvoice(inv: Invoice) {
+    if (!window.confirm(`Delete invoice ${inv.invoice_number}? This action cannot be undone.`)) return;
+    setDeletingId(inv.id);
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToast({
+          type: 'error',
+          title: 'Delete failed',
+          description: data.error || `The server rejected the deletion (HTTP ${res.status}).`,
+        });
+        return;
+      }
+      setInvoices((prev) => prev.filter((i) => i.id !== inv.id));
+      showToast({ type: 'success', title: 'Invoice deleted', description: `${inv.invoice_number} was removed.` });
+    } catch {
+      showToast({ type: 'error', title: 'Delete failed', description: 'Network error — the invoice was NOT deleted.' });
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function handleViewInvoice(inv: Invoice) {
+    router.push(`/invoice-details?id=${encodeURIComponent(inv.id)}`);
+  }
+
   useEffect(() => {
-    const timer = setTimeout(() => loadInvoices(), 0);
-    return () => clearTimeout(timer);
+    let active = true;
+    (async () => {
+      await Promise.resolve();
+      if (active) loadInvoices();
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const filteredInvoices = invoices.filter((inv) => {
@@ -201,6 +241,12 @@ export default function InvoicesPage() {
             </div>
           </div>
 
+          {loadError && (
+            <div className="p-3 rounded-lg bg-error-50 dark:bg-error-500/10 border border-error-200 dark:border-error-800 text-xs text-error-700 dark:text-error-400 flex items-start gap-2 mb-4">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>{loadError}</span>
+            </div>
+          )}
           <div className="rounded-2xl border border-border bg-surface shadow-sm overflow-hidden">
             {loading ? (
               <div className="p-8">
@@ -227,9 +273,14 @@ export default function InvoicesPage() {
                 }
               />
             ) : viewMode === 'list' ? (
-              <InvoiceListView invoices={filteredInvoices} />
+              <InvoiceListView
+                invoices={filteredInvoices}
+                onView={handleViewInvoice}
+                onDelete={handleDeleteInvoice}
+                deletingId={deletingId}
+              />
             ) : (
-              <InvoiceGridView invoices={filteredInvoices} />
+              <InvoiceGridView invoices={filteredInvoices} onView={handleViewInvoice} />
             )}
           </div>
         </div>
@@ -238,7 +289,17 @@ export default function InvoicesPage() {
   );
 }
 
-function InvoiceListView({ invoices }: { invoices: Invoice[] }) {
+function InvoiceListView({
+  invoices,
+  onView,
+  onDelete,
+  deletingId,
+}: {
+  invoices: Invoice[];
+  onView: (inv: Invoice) => void;
+  onDelete: (inv: Invoice) => void;
+  deletingId: string | null;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
@@ -294,12 +355,15 @@ function InvoiceListView({ invoices }: { invoices: Invoice[] }) {
                   <button
                     className="p-2 text-text-tertiary hover:text-primary-600 dark:hover:text-primary-400 hover:bg-surface-tertiary rounded-lg transition-colors"
                     aria-label="View details"
+                    onClick={() => onView(inv)}
                   >
                     <Eye className="h-4 w-4" />
                   </button>
                   <button
                     className="p-2 text-text-tertiary hover:text-error-600 dark:hover:text-error-400 hover:bg-surface-tertiary rounded-lg transition-colors"
                     aria-label="Delete"
+                    onClick={() => onDelete(inv)}
+                    disabled={deletingId === inv.id}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -313,17 +377,17 @@ function InvoiceListView({ invoices }: { invoices: Invoice[] }) {
   );
 }
 
-function InvoiceGridView({ invoices }: { invoices: Invoice[] }) {
+function InvoiceGridView({ invoices, onView }: { invoices: Invoice[]; onView: (inv: Invoice) => void }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
       {invoices.map((inv) => (
-        <InvoiceCard key={inv.id} inv={inv} />
+        <InvoiceCard key={inv.id} inv={inv} onView={onView} />
       ))}
     </div>
   );
 }
 
-function InvoiceCard({ inv }: { inv: Invoice }) {
+function InvoiceCard({ inv, onView }: { inv: Invoice; onView: (inv: Invoice) => void }) {
   return (
     <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm hover:shadow-md transition-all group">
       <div className="flex items-start justify-between mb-3">
@@ -363,6 +427,7 @@ function InvoiceCard({ inv }: { inv: Invoice }) {
         <button
           className="p-2 text-text-tertiary hover:text-primary-600 dark:hover:text-primary-400 hover:bg-surface-tertiary rounded-lg transition-colors"
           aria-label="View details"
+          onClick={() => onView(inv)}
         >
           <Eye className="h-3.5 w-3.5" />
         </button>

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedContext, logAuditEventServer } from '@/lib/supabase/server-db';
 import { createClient } from '@/lib/supabase/server';
 import { ALLOWED_DOCUMENT_TYPES, MAX_DOCUMENT_SIZE } from '@/lib/validation/schemas';
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching documents:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     }, { status: 200 });
   } catch (err) {
     console.error('Error fetching documents:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
   } catch (err) {
     console.error('Error handling document upload:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to process document' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to process document' }, { status: 500 });
   }
 }
 
@@ -266,6 +266,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true, message: 'Document deleted' }, { status: 200 });
   } catch (err) {
     console.error('Error deleting document:', err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to delete document' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to delete document' }, { status: 500 });
   }
 }
