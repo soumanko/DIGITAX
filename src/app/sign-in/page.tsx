@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle2, Eye, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Eye, AlertCircle, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -83,6 +83,24 @@ export default function DIGITAXSignIn() {
     } catch {
       setError('Google sign-in is unavailable right now. Please continue with your email and password.');
       setGoogleLoading(false);
+    }
+  };
+
+  const handleDemoSignIn = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/demo-session', {
+        method: 'POST',
+      });
+      if (res.ok) {
+        router.push('/dashboard');
+      } else {
+        setError('Demo session is not available in this environment.');
+      }
+    } catch {
+      setError('Demo session is not available.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -263,6 +281,26 @@ export default function DIGITAXSignIn() {
                     <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42A11.47 11.47 0 0 0 12 0 11.99 11.99 0 0 0 1.38 6.63l3.98 3.09A7.23 7.23 0 0 1 12 4.75Z" />
                   </svg>
                   Continue with Google
+                </Button>
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="bg-surface px-2 text-text-secondary uppercase font-semibold">
+                      Or instant review access
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleDemoSignIn}
+                  className="w-full border border-border bg-surface text-text-secondary hover:bg-surface-tertiary transition-colors"
+                  title="Sign in as a demo business to explore DIGITAX features with sample data"
+                >
+                  <Sparkles className="h-4 w-4 mr-2 text-text-secondary" />
+                  Sign in as Demo Business
                 </Button>
               </CardContent>
             </Card>

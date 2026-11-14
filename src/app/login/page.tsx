@@ -330,8 +330,7 @@ export default function SignInPage() {
           variant="secondary"
           onClick={handleDemoSignIn}
           className="w-full border border-border bg-surface text-text-secondary hover:bg-surface-tertiary transition-colors"
-          disabled
-          title="Demo sessions are disabled in production-grade deployments. Sign in with your real business account, or register one from the Sign in / Register page."
+          title="Sign in as a demo business to explore DIGITAX features with sample data"
         >
           <Sparkles className="h-4 w-4 mr-2 text-text-secondary" />
           Sign in as Demo Business

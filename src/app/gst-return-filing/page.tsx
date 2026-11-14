@@ -50,7 +50,7 @@ import {
 } from '@/components/ui/select';
 import { useShopContext, identityInitials } from '@/lib/client/use-shop-context';
 import { StaticBusinessName } from '@/components/layout/static-business-name';
-import { formatINR } from '@/lib/decimal';
+import { formatINR, money } from '@/lib/decimal';
 import Decimal from 'decimal.js';
 
 interface GstSummaryShape {
@@ -528,9 +528,9 @@ export default function GSTReturnFiling() {
                           </span>
                           <span className="font-medium text-sm">
                             -{formatINR(
-                              (summary.gstr3b.eligible_itc.net_itc_available.cgst || '0') +
-                                (summary.gstr3b.eligible_itc.net_itc_available.sgst || '0') +
-                                (summary.gstr3b.eligible_itc.net_itc_available.igst || '0')
+                              money(summary.gstr3b.eligible_itc.net_itc_available.cgst || '0')
+                                .plus(money(summary.gstr3b.eligible_itc.net_itc_available.sgst || '0'))
+                                .plus(money(summary.gstr3b.eligible_itc.net_itc_available.igst || '0'))
                             )}
                           </span>
                         </div>

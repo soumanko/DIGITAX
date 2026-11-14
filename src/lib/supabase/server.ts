@@ -7,6 +7,14 @@ export async function createClient() {
   requireSupabaseConfig();
   const cookieStore = await cookies();
 
+  // Demo mode: use service client to bypass RLS for demo data.
+  // The dx_demo_session cookie is set by POST /api/auth/demo-session and is
+  // HttpOnly, so client-side code cannot forge it.
+  const demoCookie = cookieStore.get('dx_demo_session');
+  if (demoCookie?.value === 'true') {
+    return createServiceClient();
+  }
+
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

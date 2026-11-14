@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { AIAssistantWidget } from './ai-assistant-widget';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -132,13 +133,44 @@ export function DashboardSidebar() {
 }
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+
   return (
     <div className="flex min-h-screen">
       <DashboardSidebar />
-      <main className="flex-1 lg:ml-0 mt-14 lg:mt-0">
+      <main className="flex-1 lg:ml-0 mt-14 lg:mt-0 relative">
+        {/* Top header with GNANI button */}
+        <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 h-14 border-b border-border bg-surface/90 backdrop-blur-md sticky top-0 z-20">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 hidden sm:flex">
+              <div className="h-6 w-6 rounded-lg bg-gradient-primary flex items-center justify-center text-white font-bold shadow-sm">
+                D
+              </div>
+              <span className="font-bold text-text-primary tracking-tight whitespace-nowrap">
+                DIGITAX
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsAssistantOpen(true)}
+              className="relative"
+              aria-label="Open AI Assistant"
+            >
+              <MessageSquare className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1.5 text-xs font-medium">GNANI</span>
+            </Button>
+          </div>
+        </div>
+
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
           {children}
         </div>
+
+        {/* AI Assistant Widget (accessible from navbar) */}
+        <AIAssistantWidget isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
       </main>
     </div>
   );

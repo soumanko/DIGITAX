@@ -62,7 +62,11 @@ export async function updateSession(request: NextRequest) {
   const isApiRoute = request.nextUrl.pathname.startsWith('/api/') &&
     !request.nextUrl.pathname.startsWith('/api/auth/');
 
-  if (!user && isProtectedRoute) {
+  // Demo mode: allow access to protected routes with demo cookie
+  const demoCookie = request.cookies.get('dx_demo_session');
+  const isDemoUser = demoCookie?.value === 'true';
+
+  if (!user && isProtectedRoute && !isDemoUser) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('redirect', request.nextUrl.pathname);
