@@ -12,6 +12,7 @@ import {
   CircleHelp,
   Landmark,
   LayoutDashboard,
+  MessageSquare,
   MoreHorizontal,
   ReceiptText,
   Search,
@@ -21,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer } from '@/components/ui/chart';
+import { AIAssistantWidget } from '@/components/layout/ai-assistant-widget';
 import {
   Select,
   SelectContent,
@@ -136,6 +138,7 @@ export default function GSTTax() {
   const [periodPurchases, setPeriodPurchases] = useState<PurchaseRow[] | null>(null);
   const [periodInvoiceStats, setPeriodInvoiceStats] = useState<{ total: number; complete: number } | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
 
   const monthName = (m: number) => new Date(2000, m - 1, 1).toLocaleString('en-IN', { month: 'short' });
 
@@ -186,14 +189,15 @@ export default function GSTTax() {
         const complete = inPeriod.filter(
           (i) =>
             (i.supplier_gstin || i.buyer_gstin) &&
-            (parseFloat((i.taxable_value || '0').replace(/,/g, '')) || 0) > 0 &&
+            (parseFloat(String(i.taxable_value || '0').replace(/,/g, '')) || 0) > 0 &&
             gstOf(i) > 0
         ).length;
         setPeriodInvoiceStats({ total: inPeriod.length, complete });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-      } catch {
+      } catch (err) {
         if (!cancelled) {
-          setDataError('Network error while loading GST data.');
+          console.error('GST data load error:', err);
+          setDataError(err instanceof Error ? err.message : 'Network error while loading GST data.');
           setPeriodPurchases([]);
         }
       }
@@ -382,6 +386,16 @@ export default function GSTTax() {
               >
                 {identityInitials(userEmail)}
               </button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsAssistantOpen(true)}
+                className="relative"
+                aria-label="Open AI Assistant"
+              >
+                <MessageSquare className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1.5 text-xs font-medium">GNANI</span>
+              </Button>
             </div>
           </header>
           <main className="px-8 pt-24 pb-10">
@@ -704,6 +718,8 @@ export default function GSTTax() {
           </main>
         </div>
       </div>
+      {/* AI Assistant Widget (accessible from GST page header) */}
+      <AIAssistantWidget isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
     </div>
   );
 }

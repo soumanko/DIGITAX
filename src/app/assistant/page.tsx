@@ -17,6 +17,10 @@ import {
   ChevronRight,
   Bot,
   AlertCircle,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeOff,
 } from 'lucide-react';
 import { askGnaniEvon, GnaniMessage } from '@/lib/ai/gnani';
 
@@ -62,9 +66,31 @@ function MessageBubble({ message, isUser }: MessageBubbleProps) {
             ))}
           </div>
           {!isUser && (
-            <p className="text-[10px] text-text-tertiary mt-2 text-right">
-              AI-generated response • Verify against source records
-            </p>
+            <>
+              <p className="text-[10px] text-text-tertiary mt-2 text-right">
+                AI-generated response • Verify against source records
+              </p>
+              <button
+                onClick={() => {
+                  // Strip HTML entities and markdown for cleaner speech
+                  const plainText = message.content
+                    .replace(/\*\*/g, '')
+                    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                    .replace(/#{1,6}\s/g, '')
+                    .trim();
+                  speakText(plainText);
+                }}
+                disabled={isSpeaking}
+                className="ml-2 mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-surface-secondary"
+                title="Read aloud"
+              >
+                {isSpeaking ? (
+                  <VolumeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Volume2 className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </>
           )}
           {isUser ? (
             <button
@@ -99,9 +125,63 @@ export default function AssistantPage() {
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Voice state
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const synthesisRef = useRef<SpeechSynthesis | null>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
   useEffect(() => {
     loadShopContext();
   }, []);
+
+  // Initialize Web Speech API (speech recognition + synthesis)
+  useEffect(() => {
+    const SpeechRecognition =
+      (window as unknown as { SpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+    const Synthesis = (window as unknown as { speechSynthesis?: SpeechSynthesis }).speechSynthesis;
+
+    if (SpeechRecognition) {
+      setVoiceSupported(true);
+      const rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = language === 'hi' ? 'hi-IN' : language === 'bn' ? 'bn-IN' : language === 'mr' ? 'mr-IN' : 'en-IN';
+
+      rec.onresult = (event: SpeechRecognitionEvent) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(transcript);
+      };
+
+      rec.onerror = () => {
+        setIsListening(false);
+      };
+
+      rec.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = rec;
+    }
+
+    if (Synthesis) {
+      synthesisRef.current = Synthesis;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+        recognitionRef.current = null;
+      }
+      if (synthesisRef.current) {
+        synthesisRef.current.cancel();
+        synthesisRef.current = null;
+      }
+    };
+  }, [language]);
 
   async function loadShopContext() {
     setContextLoading(true);
@@ -155,7 +235,45 @@ export default function AssistantPage() {
     }
   }
 
+  // Voice control functions
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current || isListening || isThinking) return;
+    setInput('');
+    setError(null);
+    setIsListening(true);
+    recognitionRef.current.start();
+  }, [isListening, isThinking]);
+
+  const stopListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+    recognitionRef.current.abort();
+    setIsListening(false);
+  }, []);
+
+  const speakText = useCallback(
+    (text: string) => {
+      if (!synthesisRef.current) return;
+      synthesisRef.current.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = language === 'hi' ? 'hi-IN' : language === 'bn' ? 'bn-IN' : language === 'mr' ? 'mr-IN' : 'en-IN';
+      utterance.rate = 0.9;
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      utteranceRef.current = utterance;
+      synthesisRef.current.speak(utterance);
+    },
+    [language]
+  );
+
+  const stopSpeaking = useCallback(() => {
+    if (!synthesisRef.current) return;
+    synthesisRef.current.cancel();
+    setIsSpeaking(false);
+  }, []);
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
+
     e.preventDefault();
     if (!input.trim() || isThinking || !shopContext) return;
 
@@ -176,7 +294,12 @@ export default function AssistantPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.text || 'No response received' }]);
+        const reply = data.text || 'No response received';
+        setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
+        // Auto-speak the assistant's reply if voice is supported
+        if (voiceSupported && !isSpeaking) {
+          speakText(reply);
+        }
       } else {
         setError('Failed to get response from assistant');
       }
@@ -186,7 +309,7 @@ export default function AssistantPage() {
       setIsThinking(false);
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [input, isThinking, shopContext, language]);
+  }, [input, isThinking, shopContext, language, voiceSupported, isSpeaking, speakText]);
 
   const suggestedQuestions = [
     'What is my current GST liability?',
@@ -275,6 +398,22 @@ export default function AssistantPage() {
                 >
                   <Send className="h-4 w-4" />
                 </Button>
+                {!voiceSupported ? null : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={isListening ? stopListening : startListening}
+                    disabled={isThinking || !shopContext}
+                    className="relative"
+                  >
+                    {isListening ? (
+                      <MicOff className="h-4 w-4 animate-pulse" />
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 {isListening ? 'animate-pulse' : 'hidden'}" />
+                  </Button>
+                )}
               </div>
               {!shopContext &&
                 (contextError ? (
@@ -294,6 +433,26 @@ export default function AssistantPage() {
                   </p>
                 ))}
             </form>
+
+            {voiceSupported && (
+              <div className="mt-2 flex items-center gap-2 px-2">
+                {isListening ? (
+                  <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+                    <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                    Listening… speak now
+                  </span>
+                ) : isSpeaking ? (
+                  <span className="flex items-center gap-1 text-xs text-primary-600 dark:text-primary-400">
+                    <Volume2 className="h-3 w-3" />
+                    Speaking…
+                  </span>
+                ) : (
+                  <span className="text-xs text-text-tertiary">
+                    🎤 Voice input enabled • Click the mic to speak
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="mt-4 flex flex-wrap gap-2">
               <p className="text-xs font-semibold text-text-tertiary uppercase mb-2 ml-1">Suggested questions</p>

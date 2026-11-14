@@ -14,6 +14,7 @@ import {
   Landmark,
   LayoutDashboard,
   LogOut,
+  MessageSquare,
   MoreHorizontal,
   ReceiptText,
   Search,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { AIAssistantWidget } from '@/components/layout/ai-assistant-widget';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import {
   Select,
@@ -86,6 +88,7 @@ export default function ExecutiveOverview() {
   const [today, setToday] = useState<Date | null>(null);
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
   const [accountPanel, setAccountPanel] = useState<'sidebar' | 'header' | null>(null);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [deleteStage, setDeleteStage] = useState<'idle' | 'confirm'>('idle');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -469,6 +472,16 @@ export default function ExecutiveOverview() {
                   />
                 )}
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsAssistantOpen(true)}
+                className="relative"
+                aria-label="Open AI Assistant"
+              >
+                <MessageSquare className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1.5 text-xs font-medium">GNANI</span>
+              </Button>
             </div>
           </header>
           <main className="px-8 pt-24 pb-8">
@@ -759,6 +772,8 @@ export default function ExecutiveOverview() {
           </main>
         </div>
       </div>
+      {/* AI Assistant Widget (accessible from dashboard header) */}
+      <AIAssistantWidget isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
     </div>
   );
 }

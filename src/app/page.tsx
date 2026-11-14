@@ -36,25 +36,25 @@ export default function DIGITAXLanding() {
               className="flex items-center gap-7"
             >
               <a
-                href="#product"
+                href="/#product"
                 className="font-medium text-foreground text-sm hover:text-primary"
               >
                 Product
               </a>
               <a
-                href="#gst-compliance"
+                href="/#gst-compliance"
                 className="font-medium text-foreground text-sm hover:text-primary"
               >
                 GST compliance
               </a>
               <a
-                href="#pricing"
+                href="/#pricing"
                 className="font-medium text-foreground text-sm hover:text-primary"
               >
                 Pricing
               </a>
               <a
-                href="#resources"
+                href="/#resources"
                 className="font-medium text-foreground text-sm hover:text-primary"
               >
                 Resources
@@ -215,7 +215,7 @@ export default function DIGITAXLanding() {
               </Card>
             </div>
           </section>
-          <section className="bg-background border-x border-y border-y-border px-6 py-10">
+          <section id="gst-compliance" className="bg-background border-x border-y border-y-border px-6 py-10">
             <div className="mx-auto w-full max-w-7xl">
               <p className="font-medium text-center text-muted-foreground text-sm">
                 Built for the way Indian businesses move
@@ -240,7 +240,7 @@ export default function DIGITAXLanding() {
               </div>
             </div>
           </section>
-          <section className="bg-secondary px-6 py-16">
+          <section id="product" className="bg-secondary px-6 py-16">
             <div className="grid mx-auto gap-16 grid-cols-2 w-full max-w-7xl">
               <div className="max-w-lg">
                 <h2 className="font-semibold text-secondary-foreground text-3xl leading-tight tracking-tight">
@@ -300,13 +300,13 @@ export default function DIGITAXLanding() {
               </p>
             </div>
             <div className="text-background/80 text-sm flex items-center gap-7">
-              <a href="#product" className="hover:text-background">
+              <a href="/#product" className="hover:text-background">
                 Product
               </a>
-              <a href="#gst-compliance" className="hover:text-background">
+              <a href="/#gst-compliance" className="hover:text-background">
                 GST compliance
               </a>
-              <a href="#pricing" className="hover:text-background">
+              <a href="/#pricing" className="hover:text-background">
                 Pricing
               </a>
             </div>

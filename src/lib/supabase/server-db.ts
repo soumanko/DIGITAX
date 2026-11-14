@@ -18,6 +18,33 @@ export interface AuthContext {
  */
 export async function getAuthenticatedContext(requestedShopId?: string | null): Promise<AuthContext> {
   const supabase = await createClient();
+
+  // Demo mode: check demo cookie first, before any auth calls.
+  // The dx_demo_session cookie is set by POST /api/auth/demo-session and is
+  // HttpOnly, so client-side code cannot forge it.
+  try {
+    const cookieStore = await cookies();
+    const demoCookie = cookieStore.get('dx_demo_session');
+    if (demoCookie?.value === 'true') {
+      const { data: demoShop } = await supabase
+        .from('shops')
+        .select('*')
+        .eq('name', 'Supermarket Pvt. Ltd.')
+        .limit(1)
+        .maybeSingle();
+      if (demoShop) {
+        return {
+          userId: '00000000-0000-0000-0000-000000000001',
+          isDemo: true,
+          shop: demoShop as DbShop,
+          userRole: 'owner',
+        };
+      }
+    }
+  } catch {
+    // Cookie store not available (e.g., during prerendering)
+  }
+
   const { data: { user }, error } = await supabase.auth.getUser();
 
   if (error || !user) {

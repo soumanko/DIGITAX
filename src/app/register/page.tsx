@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import { gstinSchema } from '@/lib/validation/schemas';
-import { ShieldCheck, Mail, Lock, User, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, User, AlertCircle, Sparkles } from 'lucide-react';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -209,11 +209,34 @@ function RegisterForm() {
             Create Account
           </Button>
         </form>
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-surface px-2 text-text-secondary uppercase font-semibold">
+              Or try demo access
+            </span>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            // Navigate to sign-in with demo mode
+            router.push('/sign-in');
+          }}
+          className="w-full border border-border bg-surface text-text-secondary hover:bg-surface-tertiary transition-colors"
+          title="Try DIGITAX with demo data"
+        >
+          <Sparkles className="h-4 w-4 mr-2 text-text-secondary" />
+          Try Demo Business
+        </Button>
       </CardContent>
       <CardFooter className="border-t border-border bg-surface-secondary/50 py-3 text-center text-xs text-text-tertiary">
         <span className="flex items-center justify-center gap-1 w-full">
           Already have an account?{' '}
-          <Link href="/login" className="font-semibold text-primary-600 hover:text-primary-500 dark:hover:text-primary-400">
+          <Link href="/sign-in" className="font-semibold text-primary-600 hover:text-primary-500 dark:hover:text-primary-400">
             Sign in
           </Link>
         </span>

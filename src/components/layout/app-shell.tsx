@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { AIAssistantWidget } from './ai-assistant-widget';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -41,6 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const { toggleTheme, resolvedTheme } = useTheme();
   const pathnameRef = useRef(pathname);
 
@@ -187,6 +189,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <div className="flex items-center gap-2">
               <ThemeSwitcher size="sm" />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsAssistantOpen(true)}
+                className="relative"
+                aria-label="Open AI Assistant"
+              >
+                <MessageSquare className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1.5 text-xs font-medium">GNANI</span>
+              </Button>
             </div>
           </div>
         </header>
@@ -196,6 +208,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+
+      {/* AI Assistant Widget (accessible from navbar) */}
+      <AIAssistantWidget isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
     </div>
   );
 }
