@@ -394,7 +394,7 @@ export async function confirmReconciliationMatchServer(
       invoice_id: invoiceId,
       allocated_amount: parseFloat(allocatedAmount),
       match_status: 'confirmed',
-      match_method: 'manual_confirmed',
+      match_method: 'manual',
       manual_review_status: 'reviewed',
     })
     .select()
