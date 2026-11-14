@@ -40,6 +40,7 @@ interface AssistantContext {
   pendingReviewCount?: number;
   matchedTransactions?: number;
   unmatchedTransactions?: number;
+  invoices?: any[];
 }
 
 interface AIAssistantWidgetProps {
@@ -141,8 +142,8 @@ export function AIAssistantWidget({ isOpen, onClose }: AIAssistantWidgetProps) {
 
   const initVoice = useCallback(() => {
     const SpeechRecognition =
-      (window as unknown as { SpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition ||
-      (window as unknown as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+      (window as unknown as { SpeechRecognition?: new () => SpeechRecognition }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognition }).webkitSpeechRecognition;
     const Synthesis = (window as unknown as { speechSynthesis?: SpeechSynthesis }).speechSynthesis;
 
     if (SpeechRecognition) {
@@ -182,11 +183,12 @@ export function AIAssistantWidget({ isOpen, onClose }: AIAssistantWidgetProps) {
       }
       const [invRes, reconRes] = await Promise.all([fetch('/api/invoices'), fetch('/api/reconciliation')]);
       const invData = await invRes.json();
-      const invoices = Array.isArray(invData.invoices) ? (invData.invoices as { amount_due?: string }[]) : [];
+      const invoices = Array.isArray(invData.invoices) ? (invData.invoices as any[]) : [];
       const openDue = invoices.reduce((acc, i) => acc.plus(money(i.amount_due || '0')), money(0));
       let unreconciledCount = 0;
+      let reconData: any = null;
       if (reconRes.ok) {
-        const reconData = await reconRes.json();
+        reconData = await reconRes.json();
         unreconciledCount = Array.isArray(reconData.suggestions) ? reconData.suggestions.length : 0;
       }
 
@@ -207,7 +209,7 @@ export function AIAssistantWidget({ isOpen, onClose }: AIAssistantWidgetProps) {
       const paidInvoices = invoices.filter((i: any) => i.payment_status === 'paid').length;
       const unpaidInvoices = invoices.filter((i: any) => i.payment_status !== 'paid').length;
       const pendingReview = invoices.filter((i: any) => i.review_state === 'pending_review').length;
-      const matchedTxns = Array.isArray(reconRes.ok ? reconRes.suggestions : []) ? reconRes.suggestions.filter((t: any) => t.match_status === 'confirmed').length : 0;
+      const matchedTxns = Array.isArray(reconData?.suggestions) ? reconData.suggestions.filter((t: any) => t.match_status === 'confirmed').length : 0;
 
       const now = new Date();
       const periodLabel = now.toLocaleString('en-IN', { month: 'long', year: 'numeric' });

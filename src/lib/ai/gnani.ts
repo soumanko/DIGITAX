@@ -214,7 +214,7 @@ export async function askGnaniEvon(
   } else if (lower.includes('open invoice') || lower.includes('outstanding') || lower.includes('amount due')) {
     reply = `For **${context.shopName}**, your total open invoices amount to ${formatINR(context.openInvoicesTotal)}. You have ${context.unpaidInvoices ?? 0} unpaid invoices and ${context.paidInvoices ?? 0} paid invoices.`;
   } else if (lower.includes('unreconciled') || lower.includes('unmatched') || lower.includes('reconciliation')) {
-    reply = `For **${context.shopName}**, you have ${context.unreconciledCount} unreconciled transactions (${context.unmatchedTransactions ?? 0} unmatched out of ${context.matchedTransactions ?? 0 + context.unmatchedTransactions ?? 0} total). ${context.pendingReviewCount ?? 0} invoices are pending review.`;
+    reply = `For **${context.shopName}**, you have ${context.unreconciledCount} unreconciled transactions (${context.unmatchedTransactions ?? 0} unmatched out of ${(context.matchedTransactions ?? 0) + (context.unmatchedTransactions ?? 0)} total). ${context.pendingReviewCount ?? 0} invoices are pending review.`;
   } else if (lower.includes('total sales') || lower.includes('sales')) {
     const sales = context.totalSales || '0';
     reply = `For **${context.shopName}**, your total sales are ${formatINR(sales)} for ${context.currentPeriod}.`;

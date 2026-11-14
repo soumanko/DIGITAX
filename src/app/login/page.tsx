@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, CircleAlert, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,11 +13,20 @@ import { ShieldCheck, Mail, Lock, AlertCircle, Sparkles } from 'lucide-react';
 
 export default function SignInPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const rawRedirect = searchParams.get('redirect');
-  const redirectPath = rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') && !rawRedirect.includes('://')
-    ? rawRedirect
-    : '/dashboard';
+  const [redirectPath, setRedirectPath] = useState('/dashboard');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const rawRedirect = params.get('redirect');
+    if (
+      rawRedirect &&
+      rawRedirect.startsWith('/') &&
+      !rawRedirect.startsWith('//') &&
+      !rawRedirect.includes('://')
+    ) {
+      setRedirectPath(rawRedirect);
+    }
+  }, []);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

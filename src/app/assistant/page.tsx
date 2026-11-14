@@ -39,9 +39,11 @@ interface AssistantContext {
 interface MessageBubbleProps {
   message: GnaniMessage;
   isUser: boolean;
+  speakText: (text: string) => void;
+  isSpeaking: boolean;
 }
 
-function MessageBubble({ message, isUser }: MessageBubbleProps) {
+function MessageBubble({ message, isUser, speakText, isSpeaking }: MessageBubbleProps) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -140,8 +142,8 @@ export default function AssistantPage() {
   // Initialize Web Speech API (speech recognition + synthesis)
   useEffect(() => {
     const SpeechRecognition =
-      (window as unknown as { SpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition ||
-      (window as unknown as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+      (window as unknown as { SpeechRecognition?: new () => SpeechRecognition }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognition }).webkitSpeechRecognition;
     const Synthesis = (window as unknown as { speechSynthesis?: SpeechSynthesis }).speechSynthesis;
 
     if (SpeechRecognition) {
@@ -345,7 +347,7 @@ export default function AssistantPage() {
             ) : (
               <div className="space-y-6" ref={messagesEndRef}>
                 {messages.map((msg, idx) => (
-                  <MessageBubble key={idx} message={msg} isUser={msg.role === 'user'} />
+                  <MessageBubble key={idx} message={msg} isUser={msg.role === 'user'} speakText={speakText} isSpeaking={isSpeaking} />
                 ))}
                 {isThinking && (
                   <div className="flex justify-start">
