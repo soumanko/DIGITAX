@@ -105,7 +105,7 @@ export function generateGSTPeriodSummary(
   });
 
   // GSTR-1: Outward Supplies (Sales)
-  const salesInvoices = periodInvoices.filter(inv => inv.invoice_type === 'sales' || inv.direction === 'sales' || inv.invoice_type === 'sales_tax_invoice');
+  const salesInvoices = periodInvoices.filter(inv => inv.invoice_type === 'sales' || inv.direction === 'sales');
 
   let b2bTaxable = money(0);
   let b2bCGST = money(0);
@@ -142,7 +142,7 @@ export function generateGSTPeriodSummary(
   }
 
   // GSTR-3B: Inward Supplies (Input Tax Credit / Purchases)
-  const purchaseInvoices = periodInvoices.filter(inv => inv.direction === 'purchase' || inv.invoice_type === 'purchase_tax_invoice');
+  const purchaseInvoices = periodInvoices.filter(inv => inv.direction === 'purchase');
 
   let itcTaxable = money(0);
   let itcCGST = money(0);
